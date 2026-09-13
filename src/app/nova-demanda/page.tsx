@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
+// ------- DADOS ESTÁTICOS -------
+
 const ESTADOS = [
   { uf: 'AC', nome: 'Acre' }, { uf: 'AL', nome: 'Alagoas' }, { uf: 'AP', nome: 'Amapá' },
   { uf: 'AM', nome: 'Amazonas' }, { uf: 'BA', nome: 'Bahia' }, { uf: 'CE', nome: 'Ceará' },
@@ -18,66 +20,103 @@ const ESTADOS = [
   { uf: 'SE', nome: 'Sergipe' }, { uf: 'TO', nome: 'Tocantins' },
 ]
 
-const TIPO_IMOVEL_OPTIONS = [
-  'Apartamento', 'Casa', 'Casa em Condomínio', 'Cobertura',
-  'Studio', 'Kitnet', 'Terreno', 'Comercial', 'Galpão', 'Sala Comercial',
-]
-
-// Amenidades por categoria
-const AMENIDADES_PREDIO = [
-  'Portaria 24h', 'Elevador', 'Piscina', 'Academia', 'Churrasqueira',
-  'Salão de festas', 'Playground', 'Vaga coberta', 'Depósito', 'Gerador', 'Pet friendly', 'Varanda/Sacada',
-]
-const AMENIDADES_CASA = [
-  'Piscina', 'Churrasqueira', 'Jardim', 'Quintal', 'Área de serviço', 'Condomínio fechado', 'Gerador', 'Pet friendly',
-]
-const AMENIDADES_GERAL = [
-  'Portaria 24h', 'Elevador', 'Piscina', 'Academia', 'Churrasqueira',
-  'Salão de festas', 'Playground', 'Vaga coberta', 'Depósito', 'Gerador',
-  'Pet friendly', 'Varanda/Sacada', 'Jardim', 'Quintal', 'Área de serviço', 'Condomínio fechado',
-]
-
-function getAmenidades(tipo: string) {
-  if (['Apartamento', 'Cobertura', 'Studio', 'Kitnet'].includes(tipo)) return AMENIDADES_PREDIO
-  if (['Casa', 'Casa em Condomínio'].includes(tipo)) return AMENIDADES_CASA
-  return AMENIDADES_GERAL
+const TIPOS_IMOVEL: Record<string, string[]> = {
+  'Residencial': ['Apartamento', 'Casa', 'Casa em Condomínio', 'Cobertura', 'Studio', 'Kitnet', 'Flat', 'Loft'],
+  'Comercial':   ['Sala Comercial', 'Loja', 'Galpão', 'Prédio Comercial', 'Terreno Comercial'],
+  'Terreno':     ['Terreno Residencial', 'Terreno Comercial', 'Terreno Rural', 'Chácara', 'Sítio', 'Fazenda'],
 }
 
-// Priority cycle: 0 = nenhum, 1 = preferencial, 2 = obrigatório
-type Prio = 0 | 1 | 2
-function nextPrio(p: Prio): Prio { return p === 0 ? 1 : p === 1 ? 2 : 0 }
+// Amenidades divididas: do imóvel vs do condomínio
+const AMEN_IMOVEL: Record<string, string[]> = {
+  'Residencial': [
+    'Sacada/Varanda', 'Churrasqueira privativa', 'Piscina privativa', 'Quintal',
+    'Jardim', 'Área de serviço', 'Ar-condicionado', 'Closet', 'Cozinha gourmet',
+    'Quarto de empregada', 'Copa', 'Lavabo',
+  ],
+  'Comercial': [
+    'Ar-condicionado', 'Copa', 'Recepção', 'Sala de reunião', 'Depósito',
+    'Piso elevado', 'Mezanino',
+  ],
+  'Terreno': ['Muro', 'Portão elétrico', 'Área verde', 'Nascente/Rio'],
+}
+
+const AMEN_COND: Record<string, string[]> = {
+  'Residencial': [
+    'Portaria 24h', 'Elevador', 'Piscina', 'Academia', 'Salão de festas',
+    'Churrasqueira coletiva', 'Playground', 'Quadra esportiva', 'Sauna',
+    'Coworking', 'Gerador', 'Pet friendly', 'Vaga coberta', 'Depósito/Box',
+    'Bicicletário', 'Vaga de visitante',
+  ],
+  'Comercial': [
+    'Portaria 24h', 'Elevador', 'Gerador', 'Estacionamento', 'Coworking',
+    'Auditório', 'Restaurante no prédio',
+  ],
+  'Terreno': [],
+}
+
+function getTipoCategoria(tipo: string): string {
+  for (const [cat, lista] of Object.entries(TIPOS_IMOVEL)) {
+    if (lista.includes(tipo)) return cat
+  }
+  return 'Residencial'
+}
+
+const IS_CONDO_TIPO = ['Apartamento', 'Cobertura', 'Studio', 'Kitnet', 'Flat', 'Loft',
+  'Casa em Condomínio', 'Sala Comercial', 'Loja', 'Prédio Comercial']
+
+// ------- HELPERS -------
+
+type Prio = 'pref' | 'req' | null
+function nextPrio(p: Prio): Prio { return p === null ? 'pref' : p === 'pref' ? 'req' : null }
 
 function PrioChip({ value, onToggle }: { value: Prio; onToggle: () => void }) {
-  if (value === 0) return (
+  if (!value) return (
     <button type="button" onClick={onToggle}
-      className="text-xs px-2 py-0.5 rounded-full border border-stone-200 text-stone-400 hover:border-stone-300 transition-colors">
+      className="text-xs px-2 py-0.5 rounded-full border border-stone-200 text-stone-400 hover:border-stone-300 transition-colors whitespace-nowrap">
       Qualquer
     </button>
   )
-  if (value === 1) return (
+  if (value === 'pref') return (
     <button type="button" onClick={onToggle}
-      className="text-xs px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors">
+      className="text-xs px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors whitespace-nowrap">
       Preferencial
     </button>
   )
   return (
     <button type="button" onClick={onToggle}
-      className="text-xs px-2 py-0.5 rounded-full border border-emerald-400 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors">
+      className="text-xs px-2 py-0.5 rounded-full border border-emerald-400 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors whitespace-nowrap">
       Obrigatório
     </button>
   )
 }
 
-function formatBRL(raw: string) {
-  return raw.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+function AmenChip({ label, value, onToggle }: { label: string; value: Prio; onToggle: () => void }) {
+  return (
+    <button type="button" onClick={onToggle}
+      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+        !value   ? 'bg-white text-stone-500 border-stone-200 hover:border-stone-300' :
+        value === 'pref' ? 'bg-amber-50 text-amber-700 border-amber-300' :
+                   'bg-emerald-50 text-emerald-700 border-emerald-400'
+      }`}>
+      {value === 'pref' && '★ '}{value === 'req' && '✓ '}{label}
+    </button>
+  )
 }
+
+function formatBRL(raw: string) { return raw.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.') }
 function parseBRL(v: string) { return v.replace(/\./g, '') }
+
+// ------- COMPONENT -------
 
 export default function NovaDemandaPage() {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Tipo/subtipo
+  const [tipoSelecionado, setTipoSelecionado] = useState('')
+  const [subtipo, setSubtipo] = useState('')
 
   // Localização
   const [estado, setEstado] = useState('')
@@ -88,62 +127,59 @@ export default function NovaDemandaPage() {
   const [bairros, setBairros] = useState<string[]>([])
   const [bairroInput, setBairroInput] = useState('')
 
-  // Campos com prioridade
-  const [quartos, setQuartos] = useState('')
-  const [quartosPrio, setQuartosPrio] = useState<Prio>(0)
-  const [suites, setSuites] = useState('')
-  const [suitesPrio, setSuitesPrio] = useState<Prio>(0)
-  const [banheiros, setBanheiros] = useState('')
-  const [banheirosPrio, setBanheirosPrio] = useState<Prio>(0)
-  const [vagas, setVagas] = useState('')
-  const [vagasPrio, setVagasPrio] = useState<Prio>(0)
+  // Área
   const [areaMin, setAreaMin] = useState('')
   const [areaMax, setAreaMax] = useState('')
-  const [areaPrio, setAreaPrio] = useState<Prio>(0)
+  const [areaMinPrio, setAreaMinPrio] = useState<Prio>(null)
+  const [areaMaxPrio, setAreaMaxPrio] = useState<Prio>(null)
 
-  // Orçamento
+  // Características numéricas (com prio TEXT)
+  const [quartos, setQuartos] = useState('')
+  const [quartosPrio, setQuartosPrio] = useState<Prio>(null)
+  const [suites, setSuites] = useState('')
+  const [suitesPrio, setSuitesPrio] = useState<Prio>(null)
+  const [banheiros, setBanheiros] = useState('')
+  const [banheirosPrio, setBanheirosPrio] = useState<Prio>(null)
+  const [vagas, setVagas] = useState('')
+  const [vagasPrio, setVagasPrio] = useState<Prio>(null)
+
+  // Financeiro
   const [valorMin, setValorMin] = useState('')
   const [valorMax, setValorMax] = useState('')
-  const [valorPrio, setValorPrio] = useState<Prio>(0)
+  const [valorMinPrio, setValorMinPrio] = useState<Prio>(null)
+  const [valorMaxPrio, setValorMaxPrio] = useState<Prio>(null)
   const [condMax, setCondMax] = useState('')
-  const [condPrio, setCondPrio] = useState<Prio>(0)
+  const [condPrio, setCondPrio] = useState<Prio>(null)
+  const [iptuMax, setIptuMax] = useState('')
+  const [iptuPrio, setIptuPrio] = useState<Prio>(null)
 
-  // Amenidades: Record<amenidade, 0|1|2>
-  const [amenidades, setAmenidades] = useState<Record<string, Prio>>({})
+  // Amenidades
+  const [amenImovel, setAmenImovel] = useState<Record<string, Prio>>({})
+  const [amenCond, setAmenCond] = useState<Record<string, Prio>>({})
 
-  // Prazo
+  // Outras
+  const [finalidade, setFinalidade] = useState('compra')
+  const [aceitaFin, setAceitaFin] = useState(false)
+  const [aceitaPerm, setAceitaPerm] = useState(false)
   const [prazoDef, setPrazoDef] = useState(false)
   const [prazoValor, setPrazoValor] = useState('3')
   const [prazoUnidade, setPrazoUnidade] = useState<'meses' | 'anos'>('meses')
+  const [observacoes, setObservacoes] = useState('')
 
-  const [form, setForm] = useState({
-    finalidade: 'compra',
-    tipo_imovel: '',
-    aceita_financiamento: false,
-    aceita_permuta: false,
-    observacoes: '',
-  })
-
-  function setF(field: string, value: string | boolean) {
-    setForm(prev => ({ ...prev, [field]: value }))
-  }
-
-  // IBGE: carregar cidades quando estado muda
+  // IBGE
   useEffect(() => {
     if (!estado) { setCidades([]); setCidadeInput(''); return }
-    setLoadingCidades(true)
-    setCidadeInput('')
+    setLoadingCidades(true); setCidadeInput('')
     fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${estado}/municipios?orderBy=nome`)
       .then(r => r.json())
-      .then((data: { nome: string }[]) => { setCidades(data.map(d => d.nome)); setLoadingCidades(false) })
+      .then((d: { nome: string }[]) => { setCidades(d.map(x => x.nome)); setLoadingCidades(false) })
       .catch(() => setLoadingCidades(false))
   }, [estado])
 
-  // Sugestões cidade
   useEffect(() => {
     if (!cidadeInput || cidadeInput.length < 2) { setCidadeSuggestions([]); return }
-    const lower = cidadeInput.toLowerCase()
-    setCidadeSuggestions(cidades.filter(c => c.toLowerCase().includes(lower)).slice(0, 6))
+    const low = cidadeInput.toLowerCase()
+    setCidadeSuggestions(cidades.filter(c => c.toLowerCase().includes(low)).slice(0, 6))
   }, [cidadeInput, cidades])
 
   function addBairro() {
@@ -152,31 +188,36 @@ export default function NovaDemandaPage() {
     setBairroInput('')
   }
 
-  function toggleAmenidade(a: string) {
-    setAmenidades(prev => ({ ...prev, [a]: nextPrio((prev[a] ?? 0) as Prio) }))
+  function urgencia() {
+    if (prazoDef) return 'baixa'
+    const m = prazoUnidade === 'anos' ? Number(prazoValor) * 12 : Number(prazoValor)
+    return m <= 2 ? 'alta' : m <= 6 ? 'normal' : 'baixa'
   }
 
-  function urgenciaFromPrazo() {
-    if (prazoDef) return 'baixa'
-    const meses = prazoUnidade === 'anos' ? Number(prazoValor) * 12 : Number(prazoValor)
-    return meses <= 2 ? 'alta' : meses <= 6 ? 'normal' : 'baixa'
-  }
+  const cat = getTipoCategoria(tipoSelecionado)
+  const showCondo = IS_CONDO_TIPO.includes(tipoSelecionado)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true)
-    setError('')
+    if (!tipoSelecionado) { setError('Selecione o tipo de imóvel.'); return }
+    setLoading(true); setError('')
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
 
     const payload: Record<string, unknown> = {
       broker_id: user.id,
-      finalidade: form.finalidade,
-      tipo_imovel: form.tipo_imovel || null,
-      cidade: cidadeInput || null,
+      finalidade,
+      tipo_imovel: tipoSelecionado,
+      subtipo: subtipo || null,
       estado: estado || null,
-      // Características (apenas _min, sem _max)
+      cidade: cidadeInput || null,
+      // Área
+      area_min: areaMin ? Number(areaMin) : null,
+      area_max: areaMax ? Number(areaMax) : null,
+      area_min_prio: areaMinPrio,
+      area_max_prio: areaMaxPrio,
+      // Características
       quartos_min: quartos ? Number(quartos) : null,
       quartos_prio: quartosPrio,
       suites_min: suites ? Number(suites) : null,
@@ -185,22 +226,22 @@ export default function NovaDemandaPage() {
       banheiros_prio: banheirosPrio,
       vagas_min: vagas ? Number(vagas) : null,
       vagas_prio: vagasPrio,
-      area_min: areaMin ? Number(areaMin) : null,
-      area_max: areaMax ? Number(areaMax) : null,
-      area_prio: areaPrio,
-      // Orçamento
+      // Financeiro
       valor_min: valorMin ? Number(parseBRL(valorMin)) : null,
       valor_max: valorMax ? Number(parseBRL(valorMax)) : null,
-      valor_prio: valorPrio,
+      valor_min_prio: valorMinPrio,
+      valor_max_prio: valorMaxPrio,
       cond_max: condMax ? Number(parseBRL(condMax)) : null,
       cond_prio: condPrio,
-      // Outros
-      aceita_financiamento: form.aceita_financiamento,
-      aceita_permuta: form.aceita_permuta,
-      urgencia: urgenciaFromPrazo(),
+      iptu_max: iptuMax ? Number(parseBRL(iptuMax)) : null,
+      iptu_prio: iptuPrio,
+      // Condições
+      aceita_financiamento: aceitaFin ? 'on' : 'off',
+      aceita_permuta: aceitaPerm ? 'on' : 'off',
+      urgencia: urgencia(),
       observacoes: [
         !prazoDef ? `Prazo: ${prazoValor} ${prazoUnidade}` : 'Sem prazo definido',
-        form.observacoes,
+        observacoes,
       ].filter(Boolean).join(' | ') || null,
       status: 'ativa',
     }
@@ -208,11 +249,7 @@ export default function NovaDemandaPage() {
     const { data: demand, error: demandError } = await supabase
       .from('demands').insert(payload).select('id').single()
 
-    if (demandError) {
-      setError('Erro ao cadastrar: ' + demandError.message)
-      setLoading(false)
-      return
-    }
+    if (demandError) { setError('Erro ao cadastrar: ' + demandError.message); setLoading(false); return }
 
     if (demand?.id) {
       // Bairros
@@ -221,21 +258,19 @@ export default function NovaDemandaPage() {
           bairros.map(b => ({ demand_id: demand.id, type: 'bairro', value: b }))
         )
       }
-      // Amenidades (só prio 1 ou 2)
-      const amenRows = Object.entries(amenidades)
-        .filter(([, p]) => p > 0)
-        .map(([amenity, p]) => ({ demand_id: demand.id, amenity, priority: p === 1 ? 'pref' : 'req' }))
-      if (amenRows.length > 0) {
-        await supabase.from('demand_amenities').insert(amenRows)
-      }
+      // Amenidades imóvel + condomínio
+      const amenRows = [
+        ...Object.entries(amenImovel).filter(([, p]) => p).map(([a, p]) => ({ demand_id: demand.id, amenity: a, priority: p as string })),
+        ...Object.entries(amenCond).filter(([, p]) => p).map(([a, p]) => ({ demand_id: demand.id, amenity: `[cond] ${a}`, priority: p as string })),
+      ]
+      if (amenRows.length > 0) await supabase.from('demand_amenities').insert(amenRows)
     }
 
     router.push('/demandas')
     router.refresh()
   }
 
-  const amenidadesLista = getAmenidades(form.tipo_imovel)
-
+  // ---- RENDER ----
   return (
     <div className="min-h-screen bg-stone-50">
       <header className="bg-white border-b border-stone-200 sticky top-0 z-10">
@@ -243,39 +278,35 @@ export default function NovaDemandaPage() {
           <Link href="/demandas" className="text-xl font-serif font-medium text-emerald-800">
             i<em className="font-light text-stone-400 not-italic">Match</em>
           </Link>
-          <Link href="/demandas" className="text-sm text-stone-500 hover:text-stone-800 transition-colors">← Voltar</Link>
+          <Link href="/demandas" className="text-sm text-stone-500 hover:text-stone-800">← Voltar</Link>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6">
-        <div className="mb-6">
+        <div className="mb-4">
           <h2 className="text-xl font-medium text-stone-800">Nova demanda</h2>
           <p className="text-sm text-stone-500 mt-0.5">Cadastre o que seu cliente está procurando</p>
         </div>
 
-        {/* Legenda de prioridade */}
-        <div className="flex items-center gap-3 mb-4 text-xs text-stone-500">
-          <span>Clique para definir prioridade:</span>
-          <span className="px-2 py-0.5 rounded-full border border-stone-200 text-stone-400">Qualquer</span>
-          <span>→</span>
-          <span className="px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700">Preferencial</span>
-          <span>→</span>
-          <span className="px-2 py-0.5 rounded-full border border-emerald-400 bg-emerald-50 text-emerald-700">Obrigatório</span>
+        {/* Legenda */}
+        <div className="flex flex-wrap items-center gap-2 mb-4 text-xs text-stone-500 bg-white border border-stone-200 rounded-lg px-3 py-2">
+          <span className="font-medium">Prioridade:</span>
+          <span className="px-2 py-0.5 rounded-full border border-stone-200 text-stone-400">Qualquer</span>→
+          <span className="px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700">★ Preferencial</span>→
+          <span className="px-2 py-0.5 rounded-full border border-emerald-400 bg-emerald-50 text-emerald-700">✓ Obrigatório</span>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>
-          )}
+          {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
 
-          {/* Finalidade */}
+          {/* 1 - Finalidade */}
           <div className="bg-white rounded-xl border border-stone-200 p-4">
-            <h3 className="text-sm font-medium text-stone-700 mb-3">Finalidade</h3>
+            <h3 className="text-sm font-semibold text-stone-700 mb-3">Finalidade</h3>
             <div className="flex gap-3">
-              {['compra', 'aluguel'].map(f => (
-                <button key={f} type="button" onClick={() => setF('finalidade', f)}
+              {(['compra', 'aluguel'] as const).map(f => (
+                <button key={f} type="button" onClick={() => setFinalidade(f)}
                   className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                    form.finalidade === f ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-stone-600 border-stone-300 hover:border-emerald-400'
+                    finalidade === f ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-stone-600 border-stone-300 hover:border-emerald-400'
                   }`}>
                   {f === 'compra' ? 'Compra' : 'Aluguel'}
                 </button>
@@ -283,35 +314,46 @@ export default function NovaDemandaPage() {
             </div>
           </div>
 
-          {/* Tipo */}
-          <div className="bg-white rounded-xl border border-stone-200 p-4">
-            <h3 className="text-sm font-medium text-stone-700 mb-3">Tipo de imóvel</h3>
-            <div className="flex flex-wrap gap-2">
-              {TIPO_IMOVEL_OPTIONS.map(tipo => (
-                <button key={tipo} type="button"
-                  onClick={() => { setF('tipo_imovel', form.tipo_imovel === tipo ? '' : tipo); setAmenidades({}) }}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                    form.tipo_imovel === tipo ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-stone-600 border-stone-300 hover:border-emerald-400'
-                  }`}>
-                  {tipo}
-                </button>
-              ))}
-            </div>
+          {/* 2 - Tipo de imóvel */}
+          <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-stone-700">Tipo de imóvel <span className="text-red-400">*</span></h3>
+            {Object.entries(TIPOS_IMOVEL).map(([categoria, tipos]) => (
+              <div key={categoria}>
+                <p className="text-xs text-stone-400 font-medium uppercase tracking-wider mb-1.5">{categoria}</p>
+                <div className="flex flex-wrap gap-2">
+                  {tipos.map(tipo => (
+                    <button key={tipo} type="button"
+                      onClick={() => { setTipoSelecionado(tipoSelecionado === tipo ? '' : tipo); setAmenImovel({}); setAmenCond({}) }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                        tipoSelecionado === tipo ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-stone-600 border-stone-300 hover:border-emerald-400'
+                      }`}>
+                      {tipo}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {tipoSelecionado && (
+              <div>
+                <label className="block text-xs text-stone-500 mb-1">Subtipo / complemento <span className="text-stone-300">(opcional)</span></label>
+                <input type="text" value={subtipo} onChange={e => setSubtipo(e.target.value)}
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  placeholder="ex: alto padrão, novo, reformado..." />
+              </div>
+            )}
           </div>
 
-          {/* Localização */}
+          {/* 3 - Localização */}
           <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
-            <h3 className="text-sm font-medium text-stone-700">Localização</h3>
-
+            <h3 className="text-sm font-semibold text-stone-700">Localização</h3>
             <div>
-              <label className="block text-xs text-stone-500 mb-1">Estado *</label>
+              <label className="block text-xs text-stone-500 mb-1">Estado <span className="text-red-400">*</span></label>
               <select value={estado} onChange={e => setEstado(e.target.value)} required
                 className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white">
                 <option value="">Selecione o estado</option>
                 {ESTADOS.map(e => <option key={e.uf} value={e.uf}>{e.nome}</option>)}
               </select>
             </div>
-
             <div className="relative">
               <label className="block text-xs text-stone-500 mb-1">
                 Cidade {loadingCidades && <span className="text-stone-400">(carregando...)</span>}
@@ -323,16 +365,12 @@ export default function NovaDemandaPage() {
               {cidadeSuggestions.length > 0 && (
                 <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg overflow-hidden">
                   {cidadeSuggestions.map(c => (
-                    <button key={c} type="button"
-                      onClick={() => { setCidadeInput(c); setCidadeSuggestions([]) }}
-                      className="w-full text-left px-3 py-2 text-sm text-stone-700 hover:bg-stone-50 border-b border-stone-100 last:border-0">
-                      {c}
-                    </button>
+                    <button key={c} type="button" onClick={() => { setCidadeInput(c); setCidadeSuggestions([]) }}
+                      className="w-full text-left px-3 py-2 text-sm text-stone-700 hover:bg-stone-50 border-b border-stone-100 last:border-0">{c}</button>
                   ))}
                 </div>
               )}
             </div>
-
             <div>
               <label className="block text-xs text-stone-500 mb-1">Bairros</label>
               {bairros.length > 0 && (
@@ -340,7 +378,7 @@ export default function NovaDemandaPage() {
                   {bairros.map(b => (
                     <span key={b} className="flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full px-2.5 py-0.5 text-xs font-medium">
                       {b}
-                      <button type="button" onClick={() => setBairros(p => p.filter(x => x !== b))} className="text-emerald-500 hover:text-emerald-800">×</button>
+                      <button type="button" onClick={() => setBairros(p => p.filter(x => x !== b))} className="text-emerald-500 hover:text-emerald-800 leading-none">×</button>
                     </span>
                   ))}
                 </div>
@@ -351,161 +389,174 @@ export default function NovaDemandaPage() {
                   placeholder="Digite e pressione Enter para adicionar"
                   className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
                 <button type="button" onClick={addBairro} disabled={!bairroInput.trim()}
-                  className="px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-lg text-sm transition-colors disabled:opacity-40">
-                  + Add
-                </button>
+                  className="px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-lg text-sm disabled:opacity-40">+ Add</button>
               </div>
             </div>
           </div>
 
-          {/* Características */}
-          <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-4">
-            <h3 className="text-sm font-medium text-stone-700">Características</h3>
-
-            <div className="grid grid-cols-2 gap-3">
-              {/* Quartos */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-stone-500">Quartos mín.</label>
-                  <PrioChip value={quartosPrio} onToggle={() => setQuartosPrio(nextPrio(quartosPrio))} />
-                </div>
-                <input type="number" min="0" value={quartos} onChange={e => setQuartos(e.target.value)}
-                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="—" />
-              </div>
-
-              {/* Suítes */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-stone-500">Suítes mín.</label>
-                  <PrioChip value={suitesPrio} onToggle={() => setSuitesPrio(nextPrio(suitesPrio))} />
-                </div>
-                <input type="number" min="0" value={suites} onChange={e => setSuites(e.target.value)}
-                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="—" />
-              </div>
-
-              {/* Banheiros */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-stone-500">Banheiros mín.</label>
-                  <PrioChip value={banheirosPrio} onToggle={() => setBanheirosPrio(nextPrio(banheirosPrio))} />
-                </div>
-                <input type="number" min="0" value={banheiros} onChange={e => setBanheiros(e.target.value)}
-                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="—" />
-              </div>
-
-              {/* Vagas */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-stone-500">Vagas mín.</label>
-                  <PrioChip value={vagasPrio} onToggle={() => setVagasPrio(nextPrio(vagasPrio))} />
-                </div>
-                <input type="number" min="0" value={vagas} onChange={e => setVagas(e.target.value)}
-                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="—" />
-              </div>
-            </div>
-
-            {/* Área */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-stone-500">Área (m²)</label>
-                <PrioChip value={areaPrio} onToggle={() => setAreaPrio(nextPrio(areaPrio))} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <input type="number" min="0" value={areaMin} onChange={e => setAreaMin(e.target.value)}
-                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="Mín." />
-                <input type="number" min="0" value={areaMax} onChange={e => setAreaMax(e.target.value)}
-                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="Máx." />
-              </div>
-            </div>
-          </div>
-
-          {/* Orçamento */}
+          {/* 4 - Área */}
           <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
-            <h3 className="text-sm font-medium text-stone-700">Orçamento (R$)</h3>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-stone-500">Valor do imóvel</label>
-                <PrioChip value={valorPrio} onToggle={() => setValorPrio(nextPrio(valorPrio))} />
+            <h3 className="text-sm font-semibold text-stone-700">Área (m²)</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-stone-500">Mínimo</label>
+                  <PrioChip value={areaMinPrio} onToggle={() => setAreaMinPrio(nextPrio(areaMinPrio))} />
+                </div>
+                <input type="number" min="0" value={areaMin} onChange={e => setAreaMin(e.target.value)}
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="—" />
               </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-stone-500">Máximo</label>
+                  <PrioChip value={areaMaxPrio} onToggle={() => setAreaMaxPrio(nextPrio(areaMaxPrio))} />
+                </div>
+                <input type="number" min="0" value={areaMax} onChange={e => setAreaMax(e.target.value)}
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="—" />
+              </div>
+            </div>
+          </div>
+
+          {/* 5 - Características do imóvel */}
+          <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-4">
+            <h3 className="text-sm font-semibold text-stone-700">Características do imóvel</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Quartos mín.', val: quartos, setVal: setQuartos, prio: quartosPrio, setPrio: setQuartosPrio },
+                { label: 'Suítes mín.', val: suites, setVal: setSuites, prio: suitesPrio, setPrio: setSuitesPrio },
+                { label: 'Banheiros mín.', val: banheiros, setVal: setBanheiros, prio: banheirosPrio, setPrio: setBanheirosPrio },
+                { label: 'Vagas mín.', val: vagas, setVal: setVagas, prio: vagasPrio, setPrio: setVagasPrio },
+              ].map(({ label, val, setVal, prio, setPrio }) => (
+                <div key={label}>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-stone-500">{label}</label>
+                    <PrioChip value={prio} onToggle={() => setPrio(nextPrio(prio))} />
+                  </div>
+                  <input type="number" min="0" value={val} onChange={e => setVal(e.target.value)}
+                    className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="—" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 6 - Financeiro */}
+          <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-stone-700">Financeiro</h3>
+
+            {/* Valor */}
+            <div>
+              <p className="text-xs text-stone-400 font-medium uppercase tracking-wider mb-2">Valor do imóvel (R$)</p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
-                  <input type="text" inputMode="numeric" value={valorMin} onChange={e => setValorMin(formatBRL(e.target.value))}
-                    className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="Mín." />
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-stone-500">Mínimo</label>
+                    <PrioChip value={valorMinPrio} onToggle={() => setValorMinPrio(nextPrio(valorMinPrio))} />
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
+                    <input type="text" inputMode="numeric" value={valorMin} onChange={e => setValorMin(formatBRL(e.target.value))}
+                      className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="0" />
+                  </div>
                 </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
-                  <input type="text" inputMode="numeric" value={valorMax} onChange={e => setValorMax(formatBRL(e.target.value))}
-                    className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="Máx." />
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-stone-500">Máximo</label>
+                    <PrioChip value={valorMaxPrio} onToggle={() => setValorMaxPrio(nextPrio(valorMaxPrio))} />
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
+                    <input type="text" inputMode="numeric" value={valorMax} onChange={e => setValorMax(formatBRL(e.target.value))}
+                      className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="0" />
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-stone-500">Condomínio máx.</label>
-                <PrioChip value={condPrio} onToggle={() => setCondPrio(nextPrio(condPrio))} />
+            {/* Condomínio + IPTU */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-stone-500">Condomínio máx.</label>
+                  <PrioChip value={condPrio} onToggle={() => setCondPrio(nextPrio(condPrio))} />
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
+                  <input type="text" inputMode="numeric" value={condMax} onChange={e => setCondMax(formatBRL(e.target.value))}
+                    className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="0" />
+                </div>
               </div>
-              <div className="relative w-1/2">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
-                <input type="text" inputMode="numeric" value={condMax} onChange={e => setCondMax(formatBRL(e.target.value))}
-                  className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="0" />
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-stone-500">IPTU máx.</label>
+                  <PrioChip value={iptuPrio} onToggle={() => setIptuPrio(nextPrio(iptuPrio))} />
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
+                  <input type="text" inputMode="numeric" value={iptuMax} onChange={e => setIptuMax(formatBRL(e.target.value))}
+                    className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="0" />
+                </div>
               </div>
             </div>
 
-            {form.finalidade === 'compra' && (
+            {finalidade === 'compra' && (
               <div className="flex flex-wrap gap-4 pt-1">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={form.aceita_financiamento} onChange={e => setF('aceita_financiamento', e.target.checked)} className="w-4 h-4 accent-emerald-700" />
+                  <input type="checkbox" checked={aceitaFin} onChange={e => setAceitaFin(e.target.checked)} className="w-4 h-4 accent-emerald-700" />
                   <span className="text-sm text-stone-600">Aceita financiamento</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={form.aceita_permuta} onChange={e => setF('aceita_permuta', e.target.checked)} className="w-4 h-4 accent-emerald-700" />
+                  <input type="checkbox" checked={aceitaPerm} onChange={e => setAceitaPerm(e.target.checked)} className="w-4 h-4 accent-emerald-700" />
                   <span className="text-sm text-stone-600">Aceita permuta</span>
                 </label>
               </div>
             )}
           </div>
 
-          {/* Amenidades */}
-          <div className="bg-white rounded-xl border border-stone-200 p-4">
-            <h3 className="text-sm font-medium text-stone-700 mb-3">Características desejadas</h3>
-            <div className="flex flex-wrap gap-2">
-              {amenidadesLista.map(a => {
-                const prio = (amenidades[a] ?? 0) as Prio
-                return (
-                  <button key={a} type="button" onClick={() => toggleAmenidade(a)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                      prio === 0 ? 'bg-white text-stone-500 border-stone-200 hover:border-stone-300' :
-                      prio === 1 ? 'bg-amber-50 text-amber-700 border-amber-300' :
-                                   'bg-emerald-50 text-emerald-700 border-emerald-400'
-                    }`}>
-                    {prio === 1 && '★ '}{prio === 2 && '✓ '}{a}
-                  </button>
-                )
-              })}
+          {/* 7 - Amenidades do imóvel */}
+          {tipoSelecionado && AMEN_IMOVEL[cat]?.length > 0 && (
+            <div className="bg-white rounded-xl border border-stone-200 p-4">
+              <h3 className="text-sm font-semibold text-stone-700 mb-1">Características do imóvel</h3>
+              <p className="text-xs text-stone-400 mb-3">Clique uma vez = preferencial · duas vezes = obrigatório · três vezes = remover</p>
+              <div className="flex flex-wrap gap-2">
+                {AMEN_IMOVEL[cat].map(a => (
+                  <AmenChip key={a} label={a} value={amenImovel[a] ?? null}
+                    onToggle={() => setAmenImovel(p => ({ ...p, [a]: nextPrio(p[a] ?? null) }))} />
+                ))}
+              </div>
             </div>
-            <p className="text-xs text-stone-400 mt-2">Clique uma vez = Preferencial · Duas vezes = Obrigatório · Três vezes = Remover</p>
-          </div>
+          )}
 
-          {/* Prazo */}
+          {/* 8 - Amenidades do condomínio (só para tipos de condomínio) */}
+          {showCondo && AMEN_COND[cat]?.length > 0 && (
+            <div className="bg-white rounded-xl border border-stone-200 p-4">
+              <h3 className="text-sm font-semibold text-stone-700 mb-1">Características do condomínio</h3>
+              <p className="text-xs text-stone-400 mb-3">Clique uma vez = preferencial · duas vezes = obrigatório · três vezes = remover</p>
+              <div className="flex flex-wrap gap-2">
+                {AMEN_COND[cat].map(a => (
+                  <AmenChip key={a} label={a} value={amenCond[a] ?? null}
+                    onToggle={() => setAmenCond(p => ({ ...p, [a]: nextPrio(p[a] ?? null) }))} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 9 - Prazo */}
           <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
-            <h3 className="text-sm font-medium text-stone-700">Prazo</h3>
+            <h3 className="text-sm font-semibold text-stone-700">Prazo</h3>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={prazoDef} onChange={e => setPrazoDef(e.target.checked)} className="w-4 h-4 accent-emerald-700" />
               <span className="text-sm text-stone-600">Sem prazo definido</span>
             </label>
             {!prazoDef && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm text-stone-500 shrink-0">Encontrar em até</span>
                 <select value={prazoValor} onChange={e => setPrazoValor(e.target.value)}
-                  className="border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white w-20">
-                  {(prazoUnidade === 'meses' ? Array.from({ length: 12 }, (_, i) => i + 1) : Array.from({ length: 5 }, (_, i) => i + 1))
+                  className="border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white w-20">
+                  {(prazoUnidade === 'meses' ? Array.from({length:12},(_,i)=>i+1) : Array.from({length:5},(_,i)=>i+1))
                     .map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
-                <select value={prazoUnidade} onChange={e => { setPrazoUnidade(e.target.value as 'meses' | 'anos'); setPrazoValor('1') }}
-                  className="border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white">
+                <select value={prazoUnidade} onChange={e => { setPrazoUnidade(e.target.value as 'meses'|'anos'); setPrazoValor('1') }}
+                  className="border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
                   <option value="meses">meses</option>
                   <option value="anos">anos</option>
                 </select>
@@ -513,10 +564,10 @@ export default function NovaDemandaPage() {
             )}
           </div>
 
-          {/* Observações */}
+          {/* 10 - Observações */}
           <div className="bg-white rounded-xl border border-stone-200 p-4">
-            <h3 className="text-sm font-medium text-stone-700 mb-2">Observações</h3>
-            <textarea value={form.observacoes} onChange={e => setF('observacoes', e.target.value)} rows={3}
+            <h3 className="text-sm font-semibold text-stone-700 mb-2">Observações</h3>
+            <textarea value={observacoes} onChange={e => setObservacoes(e.target.value)} rows={3}
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
               placeholder="Detalhes adicionais sobre a demanda do cliente..." />
           </div>
@@ -525,7 +576,7 @@ export default function NovaDemandaPage() {
             <Link href="/demandas" className="flex-1 text-center py-2.5 rounded-lg border border-stone-300 text-sm text-stone-600 hover:bg-stone-50 transition-colors">
               Cancelar
             </Link>
-            <button type="submit" disabled={loading || !estado}
+            <button type="submit" disabled={loading || !estado || !tipoSelecionado}
               className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60">
               {loading ? 'Publicando...' : 'Publicar demanda'}
             </button>
