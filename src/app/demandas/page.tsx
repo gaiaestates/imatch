@@ -74,9 +74,10 @@ export default async function DemandasPage() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {demands.map((d: any) => (
-              <div
+              <Link
                 key={d.id}
-                className="bg-white rounded-xl border border-stone-200 p-4 hover:shadow-md transition-shadow cursor-pointer"
+                href={`/demandas/${d.id}`}
+                className="bg-white rounded-xl border border-stone-200 p-4 hover:shadow-md transition-shadow block"
               >
                 <div className="flex items-start justify-between mb-3">
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
@@ -127,7 +128,7 @@ export default async function DemandasPage() {
                     Por {(d.profiles as any).full_name}
                   </p>
                 )}
-              </div>
+              </Link>
             ))}
           </div>
         )}

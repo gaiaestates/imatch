@@ -266,7 +266,12 @@ export default function NovaDemandaPage() {
       if (amenRows.length > 0) await supabase.from('demand_amenities').insert(amenRows)
     }
 
-    router.push('/demandas')
+    // Auto-dispara matching em background (não bloqueia o redirecionamento)
+    if (demand?.id) {
+      fetch(`/api/match/${demand.id}`, { method: 'POST' }).catch(() => { /* ignora erros — job não-crítico */ })
+    }
+
+    router.push(`/demandas/${demand?.id ?? ''}`)
     router.refresh()
   }
 
