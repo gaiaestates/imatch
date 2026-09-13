@@ -79,7 +79,7 @@ export function buildZapSiteUrl(demand: DemandForMatch): string {
 
 function parseAmenidades(listing: any): string[] {
   const amenidades: string[] = []
-  const tags: string[] = [
+  const tags: any[] = [
     ...(listing.amenities ?? []),
     ...(listing.unitFloor?.amenities ?? []),
     ...(listing.building?.amenities ?? []),
@@ -87,7 +87,7 @@ function parseAmenidades(listing: any): string[] {
   ]
   for (const tag of tags) {
     if (typeof tag === 'string') amenidades.push(tag)
-    else if (typeof tag === 'object' && tag.label) amenidades.push(tag.label)
+    else if (tag && typeof tag === 'object' && tag.label) amenidades.push(tag.label)
   }
   // Busca no título e descrição também
   const text = `${listing.title ?? ''} ${listing.description ?? ''}`.toLowerCase()
