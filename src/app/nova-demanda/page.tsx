@@ -29,27 +29,59 @@ const TIPOS_IMOVEL: Record<string, string[]> = {
 // Amenidades divididas: do imóvel vs do condomínio
 const AMEN_IMOVEL: Record<string, string[]> = {
   'Residencial': [
-    'Sacada/Varanda', 'Churrasqueira privativa', 'Piscina privativa', 'Quintal',
-    'Jardim', 'Área de serviço', 'Ar-condicionado', 'Closet', 'Cozinha gourmet',
-    'Quarto de empregada', 'Copa', 'Lavabo',
+    // Espaços externos
+    'Sacada/Varanda', 'Varanda gourmet', 'Churrasqueira privativa', 'Piscina privativa',
+    'Quintal', 'Jardim privativo', 'Terraço',
+    // Internos
+    'Ar-condicionado', 'Aquecimento central', 'Aquecimento solar', 'Lareira',
+    'Armários embutidos', 'Closet', 'Walk-in closet',
+    // Cozinha / serviço
+    'Cozinha gourmet', 'Copa', 'Lavabo', 'Área de serviço', 'Quarto de serviço',
+    'Dispensa/Despensa',
+    // Tecnologia e segurança
+    'Automação residencial', 'Câmeras de segurança', 'Alarme',
+    // Acabamentos
+    'Piso de madeira', 'Porcelanato', 'Mármore',
+    // Extras
+    'Vista para o mar', 'Vista para o lago/rio', 'Vista panorâmica',
+    'Depósito individual', 'Medidor individual de água/gás',
   ],
   'Comercial': [
     'Ar-condicionado', 'Copa', 'Recepção', 'Sala de reunião', 'Depósito',
-    'Piso elevado', 'Mezanino',
+    'Piso elevado', 'Forro/Mezanino', 'Câmeras de segurança', 'Automação',
+    'Vista para a rua', 'Doca de carga',
   ],
-  'Terreno': ['Muro', 'Portão elétrico', 'Área verde', 'Nascente/Rio'],
+  'Terreno': [
+    'Muro', 'Portão elétrico', 'Área verde', 'Nascente/Rio',
+    'Plano', 'Aclive', 'Declive', 'Esquina',
+  ],
 }
 
 const AMEN_COND: Record<string, string[]> = {
   'Residencial': [
-    'Portaria 24h', 'Elevador', 'Piscina', 'Academia', 'Salão de festas',
-    'Churrasqueira coletiva', 'Playground', 'Quadra esportiva', 'Sauna',
-    'Coworking', 'Gerador', 'Pet friendly', 'Vaga coberta', 'Depósito/Box',
-    'Bicicletário', 'Vaga de visitante',
+    // Segurança e acesso
+    'Portaria 24h', 'Portaria virtual', 'Controle de acesso', 'Câmeras 24h',
+    'Elevador', 'Gerador de energia',
+    // Lazer adulto
+    'Piscina', 'Academia', 'Sauna', 'SPA', 'Espaço zen/Meditação',
+    'Salão de festas', 'Salão gourmet', 'Espaço gourmet', 'Churrasqueira coletiva',
+    'Rooftop', 'Espaço de cinema', 'Sala de jogos', 'Bar/Lounge',
+    // Esporte
+    'Quadra esportiva', 'Quadra de tênis', 'Quadra de squash', 'Quadra de padel',
+    'Campo de golfe', 'Pista de corrida', 'Skate park',
+    // Família / crianças
+    'Playground', 'Brinquedoteca', 'Espaço pet', 'Pet friendly',
+    // Trabalho e mobilidade
+    'Coworking', 'Sala de reunião coletiva', 'Bicicletário', 'Valets',
+    // Conveniência
+    'Lavanderia coletiva', 'Mini mercado', 'Restaurante no condomínio',
+    'Vaga coberta', 'Vaga de visitante', 'Depósito/Box',
+    'Área verde/Jardim', 'Horta comunitária',
   ],
   'Comercial': [
-    'Portaria 24h', 'Elevador', 'Gerador', 'Estacionamento', 'Coworking',
-    'Auditório', 'Restaurante no prédio',
+    'Portaria 24h', 'Elevador', 'Gerador', 'Estacionamento rotativo',
+    'Coworking', 'Auditório', 'Restaurante no prédio', 'Bicicletário',
+    'Banheiro acessível',
   ],
   'Terreno': [],
 }
