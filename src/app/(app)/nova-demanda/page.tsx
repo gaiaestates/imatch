@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -25,6 +25,8 @@ const TIPOS_IMOVEL: Record<string, string[]> = {
   'Comercial':   ['Sala Comercial', 'Loja', 'Galpão', 'Prédio Comercial', 'Terreno Comercial'],
   'Terreno':     ['Terreno Residencial', 'Terreno Comercial', 'Terreno Rural', 'Chácara', 'Sítio', 'Fazenda'],
 }
+
+const ESTADOS_IMOVEL = ['Lançamento', 'Padrão', 'Para reforma']
 
 const AMEN_IMOVEL: Record<string, string[]> = {
   'Residencial': [
@@ -103,6 +105,8 @@ function getTipoCategoria(tipo: string): string {
 const IS_CONDO_TIPO = ['Apartamento', 'Cobertura', 'Studio', 'Kitnet', 'Flat', 'Loft',
   'Casa em Condomínio', 'Sala Comercial', 'Loja', 'Prédio Comercial']
 
+// ------- HELPERS -------
+
 type Prio = 'pref' | 'req' | null
 function nextPrio(p: Prio): Prio { return p === null ? 'pref' : p === 'pref' ? 'req' : null }
 
@@ -143,14 +147,21 @@ function AmenChip({ label, value, onToggle }: { label: string; value: Prio; onTo
 function formatBRL(raw: string) { return raw.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.') }
 function parseBRL(v: string) { return v.replace(/\./g, '') }
 
+// ------- COMPONENT -------
+
 export default function NovaDemandaPage() {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const [tipoSelecionado, setTipoSelecionado] = useState('')
-  const [subtipo, setSubtipo] = useState('')
+  // Tipos de imóvel — seleção múltipla
+  const [tiposSelecionados, setTiposSelecionados] = useState<string[]>([])
+
+  // Estado do imóvel — seleção múltipla (Lançamento, Padrão, Para reforma)
+  const [estadoImovel, setEstadoImovel] = useState<string[]>([])
+
+  // Localização
   const [estado, setEstado] = useState('')
   const [cidades, setCidades] = useState<string[]>([])
   const [cidadeInput, setCidadeInput] = useState('')
@@ -158,10 +169,16 @@ export default function NovaDemandaPage() {
   const [loadingCidades, setLoadingCidades] = useState(false)
   const [bairros, setBairros] = useState<string[]>([])
   const [bairroInput, setBairroInput] = useState('')
+  const [bairroSuggestions, setBairroSuggestions] = useState<string[]>([])
+  const bairroRef = useRef<HTMLDivElement>(null)
+
+  // Área
   const [areaMin, setAreaMin] = useState('')
   const [areaMax, setAreaMax] = useState('')
   const [areaMinPrio, setAreaMinPrio] = useState<Prio>(null)
   const [areaMaxPrio, setAreaMaxPrio] = useState<Prio>(null)
+
+  // Características numéricas
   const [quartos, setQuartos] = useState('')
   const [quartosPrio, setQuartosPrio] = useState<Prio>(null)
   const [suites, setSuites] = useState('')
@@ -170,6 +187,8 @@ export default function NovaDemandaPage() {
   const [banheirosPrio, setBanheirosPrio] = useState<Prio>(null)
   const [vagas, setVagas] = useState('')
   const [vagasPrio, setVagasPrio] = useState<Prio>(null)
+
+  // Financeiro
   const [valorMin, setValorMin] = useState('')
   const [valorMax, setValorMax] = useState('')
   const [valorMinPrio, setValorMinPrio] = useState<Prio>(null)
@@ -178,8 +197,12 @@ export default function NovaDemandaPage() {
   const [condPrio, setCondPrio] = useState<Prio>(null)
   const [iptuMax, setIptuMax] = useState('')
   const [iptuPrio, setIptuPrio] = useState<Prio>(null)
+
+  // Amenidades
   const [amenImovel, setAmenImovel] = useState<Record<string, Prio>>({})
   const [amenCond, setAmenCond] = useState<Record<string, Prio>>({})
+
+  // Outras
   const [finalidade, setFinalidade] = useState('compra')
   const [aceitaFin, setAceitaFin] = useState(false)
   const [aceitaPerm, setAceitaPerm] = useState(false)
@@ -188,6 +211,7 @@ export default function NovaDemandaPage() {
   const [prazoUnidade, setPrazoUnidade] = useState<'meses' | 'anos'>('meses')
   const [observacoes, setObservacoes] = useState('')
 
+  // IBGE — cidades
   useEffect(() => {
     if (!estado) { setCidades([]); setCidadeInput(''); return }
     setLoadingCidades(true); setCidadeInput('')
@@ -203,10 +227,57 @@ export default function NovaDemandaPage() {
     setCidadeSuggestions(cidades.filter(c => c.toLowerCase().includes(low)).slice(0, 6))
   }, [cidadeInput, cidades])
 
-  function addBairro() {
-    const t = bairroInput.trim()
+  // Supabase — autocomplete de bairros
+  useEffect(() => {
+    if (!bairroInput || bairroInput.length < 2) { setBairroSuggestions([]); return }
+    const timer = setTimeout(async () => {
+      const { data } = await supabase
+        .from('demand_locations')
+        .select('value')
+        .eq('type', 'bairro')
+        .ilike('value', `%${bairroInput}%`)
+        .limit(10)
+      if (data) {
+        const unique = [...new Set(data.map((r: any) => r.value as string))]
+          .filter(b => !bairros.includes(b))
+          .slice(0, 7)
+        setBairroSuggestions(unique)
+      }
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [bairroInput, bairros])
+
+  // Fecha dropdown bairros ao clicar fora
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (bairroRef.current && !bairroRef.current.contains(e.target as Node)) {
+        setBairroSuggestions([])
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  function toggleTipo(tipo: string) {
+    setTiposSelecionados(prev => {
+      const next = prev.includes(tipo) ? prev.filter(t => t !== tipo) : [...prev, tipo]
+      // Reseta amenidades se ficou sem nenhum selecionado
+      if (next.length === 0) { setAmenImovel({}); setAmenCond({}) }
+      return next
+    })
+  }
+
+  function toggleEstadoImovel(est: string) {
+    setEstadoImovel(prev =>
+      prev.includes(est) ? prev.filter(e => e !== est) : [...prev, est]
+    )
+  }
+
+  function addBairro(valor?: string) {
+    const t = (valor ?? bairroInput).trim()
     if (t && !bairros.includes(t)) setBairros(p => [...p, t])
     setBairroInput('')
+    setBairroSuggestions([])
   }
 
   function urgencia() {
@@ -215,12 +286,13 @@ export default function NovaDemandaPage() {
     return m <= 2 ? 'alta' : m <= 6 ? 'normal' : 'baixa'
   }
 
-  const cat = getTipoCategoria(tipoSelecionado)
-  const showCondo = IS_CONDO_TIPO.includes(tipoSelecionado)
+  // Usa o primeiro tipo selecionado como base para amenidades e condo
+  const cat = tiposSelecionados.length > 0 ? getTipoCategoria(tiposSelecionados[0]) : 'Residencial'
+  const showCondo = tiposSelecionados.some(t => IS_CONDO_TIPO.includes(t))
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!tipoSelecionado) { setError('Selecione o tipo de imóvel.'); return }
+    if (tiposSelecionados.length === 0) { setError('Selecione pelo menos um tipo de imóvel.'); return }
     setLoading(true); setError('')
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -229,8 +301,8 @@ export default function NovaDemandaPage() {
     const payload: Record<string, unknown> = {
       broker_id: user.id,
       finalidade,
-      tipo_imovel: tipoSelecionado,
-      subtipo: subtipo || null,
+      tipo_imovel: tiposSelecionados.join(', '),
+      subtipo: estadoImovel.length > 0 ? estadoImovel.join(', ') : null,
       estado: estado || null,
       cidade: cidadeInput || null,
       area_min: areaMin ? Number(areaMin) : null,
@@ -289,6 +361,7 @@ export default function NovaDemandaPage() {
     router.refresh()
   }
 
+  // ---- RENDER ----
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="mb-4">
@@ -325,33 +398,53 @@ export default function NovaDemandaPage() {
           </div>
         </div>
 
-        {/* 2 - Tipo de imóvel */}
-        <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-stone-700">Tipo de imóvel <span className="text-red-400">*</span></h3>
+        {/* 2 - Tipo de imóvel (seleção múltipla) */}
+        <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-stone-700">
+              Tipo de imóvel <span className="text-red-400">*</span>
+              <span className="ml-2 text-xs font-normal text-stone-400">Pode selecionar mais de um</span>
+            </h3>
+            {tiposSelecionados.length > 0 && (
+              <p className="text-xs text-emerald-700 mt-1">
+                {tiposSelecionados.join(' · ')}
+              </p>
+            )}
+          </div>
           {Object.entries(TIPOS_IMOVEL).map(([categoria, tipos]) => (
             <div key={categoria}>
               <p className="text-xs text-stone-400 font-medium uppercase tracking-wider mb-1.5">{categoria}</p>
               <div className="flex flex-wrap gap-2">
                 {tipos.map(tipo => (
-                  <button key={tipo} type="button"
-                    onClick={() => { setTipoSelecionado(tipoSelecionado === tipo ? '' : tipo); setAmenImovel({}); setAmenCond({}) }}
+                  <button key={tipo} type="button" onClick={() => toggleTipo(tipo)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                      tipoSelecionado === tipo ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-stone-600 border-stone-300 hover:border-emerald-400'
+                      tiposSelecionados.includes(tipo)
+                        ? 'bg-emerald-700 text-white border-emerald-700'
+                        : 'bg-white text-stone-600 border-stone-300 hover:border-emerald-400'
                     }`}>
-                    {tipo}
+                    {tiposSelecionados.includes(tipo) && '✓ '}{tipo}
                   </button>
                 ))}
               </div>
             </div>
           ))}
-          {tipoSelecionado && (
-            <div>
-              <label className="block text-xs text-stone-500 mb-1">Subtipo / complemento <span className="text-stone-300">(opcional)</span></label>
-              <input type="text" value={subtipo} onChange={e => setSubtipo(e.target.value)}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                placeholder="ex: alto padrão, novo, reformado..." />
+
+          {/* Estado do imóvel (substituiu subtipo) */}
+          <div>
+            <p className="text-xs text-stone-400 font-medium uppercase tracking-wider mb-1.5">Estado do imóvel</p>
+            <div className="flex flex-wrap gap-2">
+              {ESTADOS_IMOVEL.map(est => (
+                <button key={est} type="button" onClick={() => toggleEstadoImovel(est)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    estadoImovel.includes(est)
+                      ? 'bg-stone-700 text-white border-stone-700'
+                      : 'bg-white text-stone-600 border-stone-300 hover:border-stone-500'
+                  }`}>
+                  {estadoImovel.includes(est) && '✓ '}{est}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
         </div>
 
         {/* 3 - Localização */}
@@ -365,6 +458,8 @@ export default function NovaDemandaPage() {
               {ESTADOS.map(e => <option key={e.uf} value={e.uf}>{e.nome}</option>)}
             </select>
           </div>
+
+          {/* Cidade */}
           <div className="relative">
             <label className="block text-xs text-stone-500 mb-1">
               Cidade {loadingCidades && <span className="text-stone-400">(carregando...)</span>}
@@ -382,7 +477,9 @@ export default function NovaDemandaPage() {
               </div>
             )}
           </div>
-          <div>
+
+          {/* Bairros com autocomplete */}
+          <div ref={bairroRef}>
             <label className="block text-xs text-stone-500 mb-1">Bairros</label>
             {bairros.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-2">
@@ -394,14 +491,31 @@ export default function NovaDemandaPage() {
                 ))}
               </div>
             )}
-            <div className="flex gap-2">
-              <input type="text" value={bairroInput} onChange={e => setBairroInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addBairro() } }}
-                placeholder="Digite e pressione Enter para adicionar"
-                className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
-              <button type="button" onClick={addBairro} disabled={!bairroInput.trim()}
-                className="px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-lg text-sm disabled:opacity-40">+ Add</button>
+            <div className="relative">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={bairroInput}
+                  onChange={e => setBairroInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addBairro() } }}
+                  placeholder="Digite o bairro"
+                  className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                <button type="button" onClick={() => addBairro()} disabled={!bairroInput.trim()}
+                  className="px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-600 rounded-lg text-sm disabled:opacity-40">+ Add</button>
+              </div>
+              {bairroSuggestions.length > 0 && (
+                <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg overflow-hidden">
+                  {bairroSuggestions.map(b => (
+                    <button key={b} type="button"
+                      onMouseDown={e => { e.preventDefault(); addBairro(b) }}
+                      className="w-full text-left px-3 py-2 text-sm text-stone-700 hover:bg-emerald-50 hover:text-emerald-800 border-b border-stone-100 last:border-0">
+                      📍 {b}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
+            <p className="text-xs text-stone-400 mt-1.5">Digite parte do nome e selecione, ou pressione Enter para adicionar</p>
           </div>
         </div>
 
@@ -519,7 +633,7 @@ export default function NovaDemandaPage() {
         </div>
 
         {/* 7 - Amenidades do imóvel */}
-        {tipoSelecionado && AMEN_IMOVEL[cat]?.length > 0 && (
+        {tiposSelecionados.length > 0 && AMEN_IMOVEL[cat]?.length > 0 && (
           <div className="bg-white rounded-xl border border-stone-200 p-4">
             <h3 className="text-sm font-semibold text-stone-700 mb-1">Características do imóvel</h3>
             <p className="text-xs text-stone-400 mb-3">Clique uma vez = preferencial · duas vezes = obrigatório · três vezes = remover</p>
@@ -611,7 +725,7 @@ export default function NovaDemandaPage() {
           <Link href="/demandas" className="flex-1 text-center py-2.5 rounded-lg border border-stone-300 text-sm text-stone-600 hover:bg-stone-50 transition-colors">
             Cancelar
           </Link>
-          <button type="submit" disabled={loading || !estado || !tipoSelecionado}
+          <button type="submit" disabled={loading || !estado || tiposSelecionados.length === 0}
             className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60">
             {loading ? 'Publicando...' : 'Publicar demanda'}
           </button>
