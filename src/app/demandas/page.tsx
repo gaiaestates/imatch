@@ -232,11 +232,9 @@ export default async function DemandasPage({ searchParams }: { searchParams: Pro
                   {/* Corretor */}
                   <div className="mt-2 flex items-center justify-between">
                     {d.profiles && (
-                      <button
-                        onClick={e => { e.preventDefault(); window.location.href = `/corretores/${d.broker_id}` }}
-                        className="text-xs text-stone-400 hover:text-emerald-700 hover:underline text-left">
+                      <span className="text-xs text-stone-400">
                         {(d.profiles as any).full_name}
-                      </button>
+                      </span>
                     )}
                     <span className="text-xs text-emerald-700 font-medium group-hover:underline ml-auto">
                       Ver detalhes →
