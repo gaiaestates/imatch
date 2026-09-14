@@ -27,8 +27,8 @@ export default function SaveButton({
   }
 
   const base = size === 'md'
-    ? 'w-9 h-9 text-lg rounded-xl'
-    : 'w-7 h-7 text-sm rounded-lg'
+    ? 'w-9 h-9 text-xl rounded-xl'
+    : 'w-7 h-7 text-base rounded-lg'
 
   return (
     <button
@@ -39,11 +39,11 @@ export default function SaveButton({
         loading ? 'opacity-40' : ''
       } ${
         saved
-          ? 'bg-red-50 text-red-500 hover:bg-red-100'
-          : 'bg-stone-100 text-stone-400 hover:bg-stone-200 hover:text-stone-600'
+          ? 'bg-amber-50 text-amber-400 hover:bg-amber-100'
+          : 'bg-stone-100 text-stone-300 hover:bg-stone-200 hover:text-amber-300'
       }`}
     >
-      {saved ? '❤️' : '🤍'}
+      {saved ? '★' : '☆'}
     </button>
   )
 }

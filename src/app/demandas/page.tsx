@@ -46,7 +46,7 @@ export default async function DemandasPage({ searchParams }: { searchParams: Pro
   // Query principal
   let query = supabase
     .from('demands')
-    .select('id, finalidade, tipo_imovel, cidade, estado, area_min, area_max, quartos_min, vagas_min, valor_min, valor_max, cond_max, status, created_at, profiles(full_name)')
+    .select('id, broker_id, finalidade, tipo_imovel, cidade, estado, area_min, area_max, quartos_min, vagas_min, valor_min, valor_max, cond_max, status, created_at, profiles(full_name)')
     .eq('status', 'ativa')
 
   // Filtros DB
@@ -121,8 +121,15 @@ export default async function DemandasPage({ searchParams }: { searchParams: Pro
           <h1 className="text-xl font-serif font-medium text-emerald-800">
             i<em className="font-light text-stone-400 not-italic">Match</em>
           </h1>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-stone-500 hidden sm:block">{profile?.full_name}</span>
+          <div className="flex items-center gap-2">
+            <Link href="/demandas?salvas=1"
+              className="hidden sm:flex items-center gap-1.5 text-sm text-stone-500 hover:text-amber-600 px-3 py-1.5 rounded-lg hover:bg-amber-50 transition-colors">
+              ★ Favoritos
+            </Link>
+            <Link href="/perfil"
+              className="hidden sm:block text-sm text-stone-500 hover:text-emerald-700 hover:underline px-2 py-1">
+              {profile?.full_name}
+            </Link>
             <Link href="/nova-demanda"
               className="bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
               + Nova demanda
@@ -225,7 +232,11 @@ export default async function DemandasPage({ searchParams }: { searchParams: Pro
                   {/* Corretor */}
                   <div className="mt-2 flex items-center justify-between">
                     {d.profiles && (
-                      <p className="text-xs text-stone-400">{(d.profiles as any).full_name}</p>
+                      <button
+                        onClick={e => { e.preventDefault(); window.location.href = `/corretores/${d.broker_id}` }}
+                        className="text-xs text-stone-400 hover:text-emerald-700 hover:underline text-left">
+                        {(d.profiles as any).full_name}
+                      </button>
                     )}
                     <span className="text-xs text-emerald-700 font-medium group-hover:underline ml-auto">
                       Ver detalhes →

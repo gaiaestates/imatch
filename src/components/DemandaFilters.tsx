@@ -76,10 +76,10 @@ export default function DemandaFilters({ total }: { total: number }) {
           onClick={() => toggle('salvas')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
             get('salvas')
-              ? 'bg-red-50 border-red-200 text-red-600'
+              ? 'bg-amber-50 border-amber-200 text-amber-600'
               : 'border-stone-200 text-stone-500 hover:bg-stone-50'
           }`}>
-          {get('salvas') ? '❤️ Favoritos' : '🤍 Favoritos'}
+          {get('salvas') ? '★ Favoritos' : '☆ Favoritos'}
         </button>
 
         {/* Ordem */}
