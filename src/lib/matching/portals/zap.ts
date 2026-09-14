@@ -51,8 +51,9 @@ function buildZapUrl(demand: DemandForMatch): string {
 }
 
 // URL legível para o corretor (link para o site do ZAP)
+// Formato correto: zapimoveis.com.br/venda/apartamentos/sp+sao-paulo/?quartos=2
 export function buildZapSiteUrl(demand: DemandForMatch): string {
-  const business = demand.finalidade === 'compra' ? 'comprar' : 'alugar'
+  const business = demand.finalidade === 'compra' ? 'venda' : 'aluguel'
   const tipoSlug: Record<string, string> = {
     'Apartamento': 'apartamentos',
     'Casa': 'casas',
@@ -60,20 +61,29 @@ export function buildZapSiteUrl(demand: DemandForMatch): string {
     'Cobertura': 'coberturas',
     'Studio': 'studios',
     'Kitnet': 'kitnets',
+    'Flat': 'flats',
+    'Loft': 'lofts',
     'Sala Comercial': 'salas-comerciais',
+    'Loja': 'lojas',
     'Galpão': 'galpoes',
     'Terreno Residencial': 'terrenos',
+    'Terreno Comercial': 'terrenos',
+    'Chácara': 'chacaras',
   }
   const tipo = tipoSlug[demand.tipo_imovel] ?? 'imoveis'
-  const estado = (demand.estado ?? 'sp').toLowerCase()
+  const estado = (demand.estado ?? 'SP').toLowerCase()
   const cidade = (demand.cidade ?? 'Sao Paulo')
     .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '-')
 
-  const params: string[] = []
-  if (demand.quartos_min) params.push(`quartos=${demand.quartos_min}`)
-  if (demand.valor_max) params.push(`preco=0-${demand.valor_max}`)
+  const qs = new URLSearchParams()
+  if (demand.quartos_min) qs.set('quartos', String(demand.quartos_min))
+  if (demand.vagas_min)   qs.set('garagens', String(demand.vagas_min))
+  if (demand.valor_min)   qs.set('preco', `${demand.valor_min}-${demand.valor_max ?? ''}`)
+  else if (demand.valor_max) qs.set('preco', `0-${demand.valor_max}`)
+  if (demand.area_min)    qs.set('areaMinima', String(demand.area_min))
+  if (demand.area_max)    qs.set('areaMaxima', String(demand.area_max))
 
-  const query = params.length ? `?${params.join('&')}` : ''
+  const query = qs.toString() ? `?${qs.toString()}` : ''
   return `https://www.zapimoveis.com.br/${business}/${tipo}/${estado}+${cidade}/${query}`
 }
 

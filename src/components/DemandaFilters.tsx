@@ -71,15 +71,15 @@ export default function DemandaFilters({ total }: { total: number }) {
           onChange={e => push('bairro', e.target.value)}
           className="text-xs border border-stone-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-400 w-28" />
 
-        {/* Salvas toggle */}
+        {/* Favoritos toggle */}
         <button type="button"
           onClick={() => toggle('salvas')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
             get('salvas')
-              ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+              ? 'bg-red-50 border-red-200 text-red-600'
               : 'border-stone-200 text-stone-500 hover:bg-stone-50'
           }`}>
-          🔖 {get('salvas') ? 'Salvos' : 'Salvos'}
+          {get('salvas') ? '❤️ Favoritos' : '🤍 Favoritos'}
         </button>
 
         {/* Ordem */}

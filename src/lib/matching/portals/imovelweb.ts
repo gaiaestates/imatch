@@ -4,36 +4,37 @@
 
 import type { DemandForMatch, ScrapedProperty } from '../types'
 
+// Formato correto ImovelWeb: /apartamentos-venda-sao-paulo.html?precio-hasta=2000000&dormitorios=2
 export function buildImovelWebSiteUrl(demand: DemandForMatch): string {
   const business = demand.finalidade === 'compra' ? 'venda' : 'aluguel'
   const tipoSlug: Record<string, string> = {
     'Apartamento': 'apartamentos',
     'Casa': 'casas',
-    'Casa em Condomínio': 'casas',
+    'Casa em Condomínio': 'casas-condominio',
     'Cobertura': 'coberturas',
     'Studio': 'studios',
     'Kitnet': 'kitnets',
+    'Flat': 'flats',
     'Sala Comercial': 'salas-comerciais',
+    'Loja': 'lojas',
     'Galpão': 'galpoes-depositos',
     'Terreno Residencial': 'terrenos',
+    'Terreno Comercial': 'terrenos-comerciais',
   }
   const tipo = tipoSlug[demand.tipo_imovel] ?? 'imoveis'
   const cidade = (demand.cidade ?? 'sao-paulo')
     .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '-')
 
-  const params: string[] = []
-  if (demand.quartos_min) params.push(`dormitorios-${demand.quartos_min}`)
-  if (demand.vagas_min)   params.push(`cocheras-${demand.vagas_min}`)
+  const qs = new URLSearchParams()
+  if (demand.quartos_min) qs.set('dormitorios', String(demand.quartos_min))
+  if (demand.vagas_min)   qs.set('cocheras', String(demand.vagas_min))
+  if (demand.valor_min)   qs.set('precio-desde', String(demand.valor_min))
+  if (demand.valor_max)   qs.set('precio-hasta', String(demand.valor_max))
+  if (demand.area_min)    qs.set('superficie-desde', String(demand.area_min))
+  if (demand.area_max)    qs.set('superficie-hasta', String(demand.area_max))
 
-  const queryParams = new URLSearchParams()
-  if (demand.valor_min) queryParams.set('precio-desde', String(demand.valor_min))
-  if (demand.valor_max) queryParams.set('precio-hasta', String(demand.valor_max))
-  if (demand.area_min)  queryParams.set('superficie-desde', String(demand.area_min))
-  if (demand.area_max)  queryParams.set('superficie-hasta', String(demand.area_max))
-
-  const path = [tipo, business, cidade, ...params].join('-')
-  const qs = queryParams.toString()
-  return `https://www.imovelweb.com.br/${path}.html${qs ? '?' + qs : ''}`
+  const path = `${tipo}-${business}-${cidade}`
+  return `https://www.imovelweb.com.br/${path}.html${qs.toString() ? '?' + qs.toString() : ''}`
 }
 
 function parseAmenidadesImovelWeb(text: string): string[] {

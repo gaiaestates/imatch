@@ -5,9 +5,11 @@ import { useState } from 'react'
 export default function SaveButton({
   demandId,
   isSaved: initial,
+  size = 'sm',
 }: {
   demandId: string
   isSaved: boolean
+  size?: 'sm' | 'md'
 }) {
   const [saved, setSaved] = useState(initial)
   const [loading, setLoading] = useState(false)
@@ -17,27 +19,31 @@ export default function SaveButton({
     e.stopPropagation()
     setLoading(true)
     try {
-      await fetch(`/api/save/${demandId}`, {
-        method: saved ? 'DELETE' : 'POST',
-      })
+      await fetch(`/api/save/${demandId}`, { method: saved ? 'DELETE' : 'POST' })
       setSaved(!saved)
     } finally {
       setLoading(false)
     }
   }
 
+  const base = size === 'md'
+    ? 'w-9 h-9 text-lg rounded-xl'
+    : 'w-7 h-7 text-sm rounded-lg'
+
   return (
     <button
       onClick={toggle}
       disabled={loading}
-      title={saved ? 'Remover dos salvos' : 'Salvar demanda'}
-      className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-full transition-colors ${
+      title={saved ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+      className={`${base} flex items-center justify-center transition-all shrink-0 ${
+        loading ? 'opacity-40' : ''
+      } ${
         saved
-          ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+          ? 'bg-red-50 text-red-500 hover:bg-red-100'
           : 'bg-stone-100 text-stone-400 hover:bg-stone-200 hover:text-stone-600'
-      } ${loading ? 'opacity-50' : ''}`}
+      }`}
     >
-      {saved ? '🔖' : '📌'}
+      {saved ? '❤️' : '🤍'}
     </button>
   )
 }
