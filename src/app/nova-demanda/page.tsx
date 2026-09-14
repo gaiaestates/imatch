@@ -26,62 +26,81 @@ const TIPOS_IMOVEL: Record<string, string[]> = {
   'Terreno':     ['Terreno Residencial', 'Terreno Comercial', 'Terreno Rural', 'Chácara', 'Sítio', 'Fazenda'],
 }
 
-// Amenidades divididas: do imóvel vs do condomínio
+// Amenidades — alinhadas com terminologia dos portais (ZAP, ImovelWeb, etc.)
+// AMEN_IMOVEL: características do próprio imóvel
+// AMEN_COND: características do condomínio (lazer, infraestrutura e segurança)
+
 const AMEN_IMOVEL: Record<string, string[]> = {
   'Residencial': [
-    // Espaços externos
-    'Sacada/Varanda', 'Varanda gourmet', 'Churrasqueira privativa', 'Piscina privativa',
+    // Externo
+    'Varanda', 'Varanda gourmet', 'Churrasqueira privativa', 'Piscina privativa',
     'Quintal', 'Jardim privativo', 'Terraço',
-    // Internos
-    'Ar-condicionado', 'Aquecimento central', 'Aquecimento solar', 'Lareira',
-    'Armários embutidos', 'Closet', 'Walk-in closet',
+    // Interno
+    'Ar-condicionado', 'Aquecimento', 'Aquecimento solar', 'Lareira',
+    'Armário embutido', 'Armário embutido no quarto', 'Armário na cozinha', 'Armário no banheiro',
+    'Closet',
     // Cozinha / serviço
-    'Cozinha gourmet', 'Copa', 'Lavabo', 'Área de serviço', 'Quarto de serviço',
-    'Dispensa/Despensa',
-    // Tecnologia e segurança
-    'Automação residencial', 'Câmeras de segurança', 'Alarme',
-    // Acabamentos
-    'Piso de madeira', 'Porcelanato', 'Mármore',
-    // Extras
+    'Cozinha americana', 'Área de serviço', 'Depósito',
+    // Conveniência
+    'Escritório/Home office', 'Interfone', 'Mobiliado', 'TV a cabo',
+    'Conexão à internet', 'Aceita animais',
+    // Vista / localização
     'Vista para o mar', 'Vista para o lago/rio', 'Vista panorâmica',
-    'Depósito individual', 'Medidor individual de água/gás',
+    // Tecnologia
+    'Automação residencial',
   ],
   'Comercial': [
     'Ar-condicionado', 'Copa', 'Recepção', 'Sala de reunião', 'Depósito',
-    'Piso elevado', 'Forro/Mezanino', 'Câmeras de segurança', 'Automação',
-    'Vista para a rua', 'Doca de carga',
+    'Piso elevado', 'Mezanino', 'Automação', 'Vista para a rua', 'Doca de carga',
+    'Interfone', 'TV a cabo', 'Conexão à internet',
   ],
   'Terreno': [
-    'Muro', 'Portão elétrico', 'Área verde', 'Nascente/Rio',
+    'Muro', 'Portão eletrônico', 'Área verde', 'Nascente/Rio',
     'Plano', 'Aclive', 'Declive', 'Esquina',
   ],
 }
 
+// Grupos visuais dentro do condomínio (todos salvos com prefixo [cond] no DB)
+type AmenCondGrupos = { lazer: string[]; infra: string[]; seguranca: string[] }
+const AMEN_COND_GRUPOS: Record<string, AmenCondGrupos> = {
+  'Residencial': {
+    lazer: [
+      'Academia', 'Churrasqueira', 'Espaço gourmet', 'Espaço verde/Parque',
+      'Jardim', 'Piscina', 'Playground', 'Quadra de tênis', 'Quadra poliesportiva',
+      'Salão de festas', 'Salão de jogos', 'Sauna', 'Spa',
+      'Rooftop', 'Espaço pet', 'Brinquedoteca', 'Quadra de padel', 'Quadra de squash',
+    ],
+    infra: [
+      'Acesso para deficientes', 'Bicicletário', 'Coworking', 'Elevador',
+      'Garagem', 'Vaga coberta', 'Vaga de visitante', 'Gerador elétrico',
+      'Lavanderia', 'Recepção', 'Depósito/Box',
+    ],
+    seguranca: [
+      'Portaria 24h', 'Portaria virtual', 'Condomínio fechado',
+      'Portão eletrônico', 'Circuito de segurança (CFTV)', 'Sistema de alarme',
+    ],
+  },
+  'Comercial': {
+    lazer: [],
+    infra: [
+      'Portaria 24h', 'Elevador', 'Gerador', 'Estacionamento', 'Coworking',
+      'Auditório', 'Restaurante no prédio', 'Bicicletário', 'Acesso para deficientes',
+    ],
+    seguranca: ['Portaria 24h', 'Circuito de segurança (CFTV)', 'Condomínio fechado'],
+  },
+  'Terreno': { lazer: [], infra: [], seguranca: [] },
+}
+
+// Para compatibilidade com o resto do código (upsert no DB)
 const AMEN_COND: Record<string, string[]> = {
   'Residencial': [
-    // Segurança e acesso
-    'Portaria 24h', 'Portaria virtual', 'Controle de acesso', 'Câmeras 24h',
-    'Elevador', 'Gerador de energia',
-    // Lazer adulto
-    'Piscina', 'Academia', 'Sauna', 'SPA', 'Espaço zen/Meditação',
-    'Salão de festas', 'Salão gourmet', 'Espaço gourmet', 'Churrasqueira coletiva',
-    'Rooftop', 'Espaço de cinema', 'Sala de jogos', 'Bar/Lounge',
-    // Esporte
-    'Quadra esportiva', 'Quadra de tênis', 'Quadra de squash', 'Quadra de padel',
-    'Campo de golfe', 'Pista de corrida', 'Skate park',
-    // Família / crianças
-    'Playground', 'Brinquedoteca', 'Espaço pet', 'Pet friendly',
-    // Trabalho e mobilidade
-    'Coworking', 'Sala de reunião coletiva', 'Bicicletário', 'Valets',
-    // Conveniência
-    'Lavanderia coletiva', 'Mini mercado', 'Restaurante no condomínio',
-    'Vaga coberta', 'Vaga de visitante', 'Depósito/Box',
-    'Área verde/Jardim', 'Horta comunitária',
+    ...AMEN_COND_GRUPOS['Residencial'].lazer,
+    ...AMEN_COND_GRUPOS['Residencial'].infra,
+    ...AMEN_COND_GRUPOS['Residencial'].seguranca,
   ],
   'Comercial': [
-    'Portaria 24h', 'Elevador', 'Gerador', 'Estacionamento rotativo',
-    'Coworking', 'Auditório', 'Restaurante no prédio', 'Bicicletário',
-    'Banheiro acessível',
+    ...AMEN_COND_GRUPOS['Comercial'].infra,
+    ...AMEN_COND_GRUPOS['Comercial'].seguranca,
   ],
   'Terreno': [],
 }
@@ -565,15 +584,50 @@ export default function NovaDemandaPage() {
 
           {/* 8 - Amenidades do condomínio (só para tipos de condomínio) */}
           {showCondo && AMEN_COND[cat]?.length > 0 && (
-            <div className="bg-white rounded-xl border border-stone-200 p-4">
-              <h3 className="text-sm font-semibold text-stone-700 mb-1">Características do condomínio</h3>
-              <p className="text-xs text-stone-400 mb-3">Clique uma vez = preferencial · duas vezes = obrigatório · três vezes = remover</p>
-              <div className="flex flex-wrap gap-2">
-                {AMEN_COND[cat].map(a => (
-                  <AmenChip key={a} label={a} value={amenCond[a] ?? null}
-                    onToggle={() => setAmenCond(p => ({ ...p, [a]: nextPrio(p[a] ?? null) }))} />
-                ))}
+            <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-stone-700 mb-0.5">Características do condomínio</h3>
+                <p className="text-xs text-stone-400">Clique uma vez = preferencial · duas vezes = obrigatório · três vezes = remover</p>
               </div>
+
+              {/* Lazer e esporte */}
+              {AMEN_COND_GRUPOS[cat]?.lazer?.length > 0 && (
+                <div>
+                  <p className="text-xs text-stone-400 font-semibold uppercase tracking-wide mb-2">🏊 Lazer e esporte</p>
+                  <div className="flex flex-wrap gap-2">
+                    {AMEN_COND_GRUPOS[cat].lazer.map(a => (
+                      <AmenChip key={a} label={a} value={amenCond[a] ?? null}
+                        onToggle={() => setAmenCond(p => ({ ...p, [a]: nextPrio(p[a] ?? null) }))} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Infraestrutura */}
+              {AMEN_COND_GRUPOS[cat]?.infra?.length > 0 && (
+                <div>
+                  <p className="text-xs text-stone-400 font-semibold uppercase tracking-wide mb-2">🏢 Infraestrutura</p>
+                  <div className="flex flex-wrap gap-2">
+                    {AMEN_COND_GRUPOS[cat].infra.map(a => (
+                      <AmenChip key={a} label={a} value={amenCond[a] ?? null}
+                        onToggle={() => setAmenCond(p => ({ ...p, [a]: nextPrio(p[a] ?? null) }))} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Segurança */}
+              {AMEN_COND_GRUPOS[cat]?.seguranca?.length > 0 && (
+                <div>
+                  <p className="text-xs text-stone-400 font-semibold uppercase tracking-wide mb-2">🔒 Segurança</p>
+                  <div className="flex flex-wrap gap-2">
+                    {AMEN_COND_GRUPOS[cat].seguranca.map(a => (
+                      <AmenChip key={a} label={a} value={amenCond[a] ?? null}
+                        onToggle={() => setAmenCond(p => ({ ...p, [a]: nextPrio(p[a] ?? null) }))} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
