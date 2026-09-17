@@ -136,11 +136,18 @@ export default async function CorretorPage({ params }: { params: Promise<{ id: s
                 className="bg-white rounded-xl border border-stone-200 px-4 py-3 flex items-center justify-between hover:border-stone-300 hover:shadow-sm transition-all group">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      d.finalidade === 'compra' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
-                    }`}>
-                      {d.finalidade === 'compra' ? 'Compra' : 'Aluguel'}
-                    </span>
+                    {d.finalidade === 'ambos' ? (
+                      <>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">Compra</span>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">Aluguel</span>
+                      </>
+                    ) : (
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        d.finalidade === 'compra' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {d.finalidade === 'compra' ? 'Compra' : 'Aluguel'}
+                      </span>
+                    )}
                     <span className="text-sm font-medium text-stone-800">{d.tipo_imovel}</span>
                     {d.cidade && <span className="text-xs text-stone-400">· {d.cidade}</span>}
                   </div>

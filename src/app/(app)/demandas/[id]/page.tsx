@@ -158,11 +158,18 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                demand.finalidade === 'compra' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
-              }`}>
-                {demand.finalidade === 'compra' ? 'Compra' : 'Aluguel'}
-              </span>
+              {demand.finalidade === 'ambos' ? (
+                <>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">Compra</span>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800">Aluguel</span>
+                </>
+              ) : (
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                  demand.finalidade === 'compra' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {demand.finalidade === 'compra' ? 'Compra' : 'Aluguel'}
+                </span>
+              )}
             </div>
             <h1 className="text-2xl font-semibold text-stone-800">{demand.tipo_imovel}</h1>
             {(demand.cidade || bairros.length > 0) && (

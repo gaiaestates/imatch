@@ -52,7 +52,7 @@ export default async function DemandasPage({ searchParams }: { searchParams: Pro
     .select('id, broker_id, finalidade, tipo_imovel, cidade, estado, area_min, area_max, quartos_min, vagas_min, valor_min, valor_max, cond_max, status, created_at, profiles(full_name, avatar_url, imobiliaria, autonomo)')
     .eq('status', statusFilter)
 
-  if (filters.finalidade) query = query.eq('finalidade', filters.finalidade)
+  if (filters.finalidade) query = query.in('finalidade', [filters.finalidade, 'ambos'])
   if (filters.tipo)       query = query.eq('tipo_imovel', filters.tipo)
   if (filters.quartos)    query = query.gte('quartos_min', Number(filters.quartos))
   if (filters.vagas)      query = query.gte('vagas_min', Number(filters.vagas))
@@ -207,11 +207,18 @@ export default async function DemandasPage({ searchParams }: { searchParams: Pro
 
                 <div className="flex items-start justify-between mb-2 gap-2">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      d.finalidade === 'compra' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
-                    }`}>
-                      {d.finalidade === 'compra' ? 'Compra' : 'Aluguel'}
-                    </span>
+                    {d.finalidade === 'ambos' ? (
+                      <>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">Compra</span>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">Aluguel</span>
+                      </>
+                    ) : (
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        d.finalidade === 'compra' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {d.finalidade === 'compra' ? 'Compra' : 'Aluguel'}
+                      </span>
+                    )}
                     <span className="text-xs text-stone-300">{dataFormatada}</span>
                   </div>
                   <SaveButton demandId={d.id} isSaved={isSaved} />

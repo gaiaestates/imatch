@@ -203,7 +203,9 @@ export default function NovaDemandaPage() {
   const [amenCond, setAmenCond] = useState<Record<string, Prio>>({})
 
   // Outras
-  const [finalidade, setFinalidade] = useState('compra')
+  const [compra, setCompra] = useState(true)
+  const [aluguel, setAluguel] = useState(false)
+  const finalidade = compra && aluguel ? 'ambos' : aluguel ? 'aluguel' : 'compra'
   const [aceitaFin, setAceitaFin] = useState(false)
   const [aceitaPerm, setAceitaPerm] = useState(false)
   const [prazoDef, setPrazoDef] = useState(false)
@@ -292,6 +294,7 @@ export default function NovaDemandaPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!compra && !aluguel) { setError('Selecione ao menos uma finalidade.'); return }
     if (tiposSelecionados.length === 0) { setError('Selecione pelo menos um tipo de imóvel.'); return }
     setLoading(true); setError('')
 
@@ -387,15 +390,22 @@ export default function NovaDemandaPage() {
         <div className="bg-white rounded-xl border border-stone-200 p-4">
           <h3 className="text-sm font-semibold text-stone-700 mb-3">Finalidade</h3>
           <div className="flex gap-3">
-            {(['compra', 'aluguel'] as const).map(f => (
-              <button key={f} type="button" onClick={() => setFinalidade(f)}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                  finalidade === f ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-stone-600 border-stone-300 hover:border-emerald-400'
-                }`}>
-                {f === 'compra' ? 'Compra' : 'Aluguel'}
-              </button>
-            ))}
+            <button type="button" onClick={() => { setCompra(v => !v); if (!compra && !aluguel) setCompra(true) }}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                compra ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-stone-600 border-stone-300 hover:border-emerald-400'
+              }`}>
+              Compra
+            </button>
+            <button type="button" onClick={() => { setAluguel(v => !v) }}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                aluguel ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-stone-600 border-stone-300 hover:border-blue-400'
+              }`}>
+              Aluguel
+            </button>
           </div>
+          {!compra && !aluguel && (
+            <p className="text-xs text-red-500 mt-2">Selecione ao menos uma finalidade.</p>
+          )}
         </div>
 
         {/* 2 - Tipo de imóvel (seleção múltipla) */}
@@ -618,7 +628,7 @@ export default function NovaDemandaPage() {
               </div>
             </div>
           </div>
-          {finalidade === 'compra' && (
+          {(finalidade === 'compra' || finalidade === 'ambos') && (
             <div className="flex flex-wrap gap-4 pt-1">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={aceitaFin} onChange={e => setAceitaFin(e.target.checked)} className="w-4 h-4 accent-emerald-700" />
