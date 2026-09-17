@@ -42,6 +42,8 @@ interface Props {
   quartos_prio?:   string | null
   vagas_min:       number | null
   vagas_prio?:     string | null
+  valor_min:       number | null
+  valor_min_prio?: string | null
   valor_max:       number | null
   valor_max_prio?: string | null
   area_min:        number | null
@@ -65,6 +67,11 @@ function calcChecks(p: any, props: Props): Check[] {
     label: `${props.area_min}m²`,
     met: (p.areas?.private ?? 0) >= props.area_min,
     mandatory: props.area_min_prio === 'req',
+  })
+  if (props.valor_min) checks.push({
+    label: `${fmtBRL(props.valor_min)} mín`,
+    met: price != null && price >= props.valor_min,
+    mandatory: props.valor_min_prio === 'req',
   })
   if (props.valor_max) checks.push({
     label: `${fmtBRL(props.valor_max)} máx`,
@@ -141,7 +148,7 @@ function CheckRow({ checks }: { checks: Check[] }) {
 
 export default function NonstopSearch(props: Props) {
   const { finalidade, tipo_imovel, cidade, estado, bairros,
-          quartos_min, vagas_min, valor_max, area_min, cond_max } = props
+          quartos_min, vagas_min, valor_min, valor_max, area_min, cond_max } = props
 
   const [loading,    setLoading]    = useState(false)
   const [properties, setProperties] = useState<any[] | null>(null)
@@ -159,6 +166,7 @@ export default function NonstopSearch(props: Props) {
       if (bairros.length) qs.set('areas', bairros.join(','))
       if (quartos_min) qs.set('quartos_min', String(quartos_min))
       if (vagas_min)   qs.set('vagas_min', String(vagas_min))
+      if (valor_min)   qs.set('valor_min', String(valor_min))
       if (valor_max)   qs.set('valor_max', String(valor_max))
       if (area_min)    qs.set('area_min', String(area_min))
       if (cond_max)    qs.set('cond_max', String(cond_max))
@@ -227,11 +235,11 @@ export default function NonstopSearch(props: Props) {
                 const bairro = p.address?.area
                 const city   = p.address?.city
                 const checks = (p._checks ?? []) as Check[]
-                const href   = p.url?.startsWith('http') ? p.url : `https://www.usenonstop.com/imoveis/${p.url}`
+                const href   = p.fullUrl ?? (p.url?.startsWith('http') ? p.url : null)
 
                 return (
-                  <a key={p.id} href={href} target="_blank" rel="noopener noreferrer"
-                    className="group bg-stone-50 border border-stone-200 rounded-xl overflow-hidden hover:border-stone-400 hover:shadow-sm transition-all block">
+                  <a key={p.id} {...(href ? { href, target: '_blank', rel: 'noopener noreferrer' } : {})}
+                    className={`group bg-stone-50 border border-stone-200 rounded-xl overflow-hidden transition-all block ${href ? 'hover:border-stone-400 hover:shadow-sm cursor-pointer' : 'cursor-default'}`}>
 
                     <div className="relative">
                       {p.image ? (
@@ -282,7 +290,7 @@ export default function NonstopSearch(props: Props) {
                           ? <p className="text-sm font-bold text-stone-800">{price}</p>
                           : <p className="text-xs text-stone-400">A consultar</p>
                         }
-                        <span className="text-xs text-emerald-700 font-medium group-hover:underline">Ver imóvel ↗</span>
+                        {href && <span className="text-xs text-emerald-700 font-medium group-hover:underline">Ver imóvel ↗</span>}
                       </div>
 
                       <CheckRow checks={checks} />

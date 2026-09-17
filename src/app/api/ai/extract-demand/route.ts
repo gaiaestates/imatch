@@ -40,7 +40,7 @@ const USER_PROMPT = (text: string) => `Analise o texto da demanda imobiliária a
 Regras:
 - "finalidade": palavras como comprar/venda/aquisição → "compra"; alugar/locação/aluguel → "aluguel"; ambos se os dois aparecerem
 - "tipos_imovel": use apenas os tipos válidos listados, pode ser mais de um
-- "valor_min"/"valor_max": converta para número inteiro em reais (ex: "1,5 milhão" → 1500000, "800k" → 800000)
+- "valor_min"/"valor_max": converta para número inteiro em reais (ex: "1,5 milhão" → 1500000, "800k" → 800000). IMPORTANTE: se apenas um valor de orçamento/teto/preço for mencionado, coloque-o em "valor_max" e deixe "valor_min" como null. Isso vale tanto para compra quanto para locação.
 - "area_min"/"area_max": sempre em m²
 - "bairros": liste todos os bairros mencionados
 - "unidentified": inclua APENAS os campos críticos não encontrados no texto: "finalidade", "tipos_imovel", "estado", "cidade". Não inclua campos opcionais como quartos, valor, etc.

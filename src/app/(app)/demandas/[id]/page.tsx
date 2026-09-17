@@ -327,6 +327,8 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
             quartos_prio={demand.quartos_prio}
             vagas_min={demand.vagas_min}
             vagas_prio={demand.vagas_prio}
+            valor_min={demand.valor_min}
+            valor_min_prio={demand.valor_min_prio}
             valor_max={demand.valor_max}
             valor_max_prio={demand.valor_max_prio}
             area_min={demand.area_min}

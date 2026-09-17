@@ -2,6 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const BASE = 'https://www.usenonstop.com/api/unstable'
 
+async function fetchSiteBase(token: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${BASE}/site/urls`, {
+      headers: { Authorization: `Bearer ${token}` },
+      next: { revalidate: 3600 },
+    })
+    if (!res.ok) return null
+    const urls: string[] = await res.json()
+    const first = urls.find(u => u.includes('/imoveis/'))
+    return first ? first.split('/imoveis/')[0] : null
+  } catch {
+    return null
+  }
+}
+
 const TIPO_MAP: Record<string, string[]> = {
   'Apartamento':        ['APARTAMENTO_TIPO', 'APARTAMENTO_GARDEN', 'FLAT', 'STUDIO', 'KITNET', 'LOFT', 'DUPLEX', 'TRIPLEX'],
   'Casa':               ['CASA_TIPO', 'SOBRADO', 'CASA_DE_VILA'],
@@ -43,6 +58,7 @@ export async function GET(req: NextRequest) {
   const areas       = sp.get('areas')       ?? ''   // bairros, comma-sep
   const quartos_min = sp.get('quartos_min')
   const vagas_min   = sp.get('vagas_min')
+  const valor_min   = sp.get('valor_min')
   const valor_max   = sp.get('valor_max')
   const area_min    = sp.get('area_min')
   const cond_max    = sp.get('cond_max')
@@ -53,12 +69,15 @@ export async function GET(req: NextRequest) {
   if (areas)       extra.areas   = areas
   if (quartos_min) extra.minRooms       = quartos_min
   if (vagas_min)   extra.minParkingLots = vagas_min
+  if (valor_min)   extra.minVal         = valor_min
   if (valor_max)   extra.maxVal         = valor_max
   if (area_min)    extra.minPrivate     = area_min
   if (cond_max)    extra.maxCondo       = cond_max
 
   const tipos = TIPO_MAP[tipo_imovel]
   if (tipos) extra.type = tipos.join(',')
+
+  const token = process.env.NONSTOP_API_TOKEN!
 
   let properties: any[]
 
@@ -76,5 +95,11 @@ export async function GET(req: NextRequest) {
     properties = await fetchTodos(finalidade === 'compra' ? 'VENDA' : 'LOCACAO', extra)
   }
 
-  return NextResponse.json({ properties: properties.slice(0, 20) })
+  const siteBase = await fetchSiteBase(token)
+  const propertiesWithUrls = properties.slice(0, 20).map((p: any) => ({
+    ...p,
+    fullUrl: siteBase && p.url ? `${siteBase}/imoveis/${p.url}` : null,
+  }))
+
+  return NextResponse.json({ properties: propertiesWithUrls })
 }
