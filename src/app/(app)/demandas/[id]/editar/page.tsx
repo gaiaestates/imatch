@@ -2,14 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   ESTADOS, TIPOS_IMOVEL, ESTADOS_IMOVEL, AMEN_IMOVEL, AMEN_COND, AMEN_COND_GRUPOS, IS_CONDO_TIPO,
-  getTipoCategoria, type Prio, nextPrio, formatBRL, parseBRL,
+  getTipoCategoria, type Prio, nextPrio, formatBRL, parseBRL, parseObservacoes,
 } from '@/lib/demanda-constants'
-
-// ------- HELPERS -------
 
 function PrioChip({ value, onToggle }: { value: Prio; onToggle: () => void }) {
   if (!value) return (
@@ -45,15 +43,16 @@ function AmenChip({ label, value, onToggle }: { label: string; value: Prio; onTo
   )
 }
 
-// ------- COMPONENT -------
-
-export default function NovaDemandaPage() {
+export default function EditarDemandaPage() {
   const router = useRouter()
+  const { id } = useParams() as { id: string }
   const supabase = createClient()
+
+  const [initialLoading, setInitialLoading] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // ── IA: preenchimento por texto ──
+  // ── IA ──
   const [textoIA, setTextoIA] = useState('')
   const [iaLoading, setIaLoading] = useState(false)
   const [iaAberto, setIaAberto] = useState(false)
@@ -61,13 +60,9 @@ export default function NovaDemandaPage() {
   const [iaNaoIdentificado, setIaNaoIdentificado] = useState<Set<string>>(new Set())
   const pendingCityRef = useRef<string | null>(null)
 
-  // Tipos de imóvel — seleção múltipla
+  // Form state
   const [tiposSelecionados, setTiposSelecionados] = useState<string[]>([])
-
-  // Estado do imóvel — seleção múltipla (Lançamento, Padrão, Para reforma)
   const [estadoImovel, setEstadoImovel] = useState<string[]>([])
-
-  // Localização
   const [estado, setEstado] = useState('')
   const [cidades, setCidades] = useState<string[]>([])
   const [cidadeInput, setCidadeInput] = useState('')
@@ -77,14 +72,10 @@ export default function NovaDemandaPage() {
   const [bairroInput, setBairroInput] = useState('')
   const [bairroSuggestions, setBairroSuggestions] = useState<string[]>([])
   const bairroRef = useRef<HTMLDivElement>(null)
-
-  // Área
   const [areaMin, setAreaMin] = useState('')
   const [areaMax, setAreaMax] = useState('')
   const [areaMinPrio, setAreaMinPrio] = useState<Prio>(null)
   const [areaMaxPrio, setAreaMaxPrio] = useState<Prio>(null)
-
-  // Características numéricas
   const [quartos, setQuartos] = useState('')
   const [quartosPrio, setQuartosPrio] = useState<Prio>(null)
   const [suites, setSuites] = useState('')
@@ -93,8 +84,6 @@ export default function NovaDemandaPage() {
   const [banheirosPrio, setBanheirosPrio] = useState<Prio>(null)
   const [vagas, setVagas] = useState('')
   const [vagasPrio, setVagasPrio] = useState<Prio>(null)
-
-  // Financeiro
   const [valorMin, setValorMin] = useState('')
   const [valorMax, setValorMax] = useState('')
   const [valorMinPrio, setValorMinPrio] = useState<Prio>(null)
@@ -103,12 +92,8 @@ export default function NovaDemandaPage() {
   const [condPrio, setCondPrio] = useState<Prio>(null)
   const [iptuMax, setIptuMax] = useState('')
   const [iptuPrio, setIptuPrio] = useState<Prio>(null)
-
-  // Amenidades
   const [amenImovel, setAmenImovel] = useState<Record<string, Prio>>({})
   const [amenCond, setAmenCond] = useState<Record<string, Prio>>({})
-
-  // Outras
   const [compra, setCompra] = useState(true)
   const [aluguel, setAluguel] = useState(false)
   const finalidade = compra && aluguel ? 'ambos' : aluguel ? 'aluguel' : 'compra'
@@ -119,7 +104,7 @@ export default function NovaDemandaPage() {
   const [prazoUnidade, setPrazoUnidade] = useState<'meses' | 'anos'>('meses')
   const [observacoes, setObservacoes] = useState('')
 
-  // IBGE — cidades
+  // IBGE cities
   useEffect(() => {
     if (!estado) { setCidades([]); setCidadeInput(''); return }
     setLoadingCidades(true); setCidadeInput('')
@@ -142,7 +127,6 @@ export default function NovaDemandaPage() {
     setCidadeSuggestions(cidades.filter(c => c.toLowerCase().includes(low)).slice(0, 6))
   }, [cidadeInput, cidades])
 
-  // Supabase — autocomplete de bairros
   useEffect(() => {
     if (!bairroInput || bairroInput.length < 2) { setBairroSuggestions([]); return }
     const timer = setTimeout(async () => {
@@ -162,7 +146,6 @@ export default function NovaDemandaPage() {
     return () => clearTimeout(timer)
   }, [bairroInput, bairros])
 
-  // Fecha dropdown bairros ao clicar fora
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (bairroRef.current && !bairroRef.current.contains(e.target as Node)) {
@@ -173,19 +156,101 @@ export default function NovaDemandaPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  // Fetch demand on mount
+  useEffect(() => {
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login'); return }
+
+      const [{ data: demand }, { data: locations }, { data: amenidades }] = await Promise.all([
+        supabase.from('demands').select('*').eq('id', id).single(),
+        supabase.from('demand_locations').select('type, value').eq('demand_id', id),
+        supabase.from('demand_amenities').select('amenity, priority').eq('demand_id', id),
+      ])
+
+      if (!demand) { router.push('/demandas'); return }
+      if (demand.broker_id !== user.id) { router.push(`/demandas/${id}`); return }
+
+      // Finalidade
+      setCompra(demand.finalidade === 'compra' || demand.finalidade === 'ambos')
+      setAluguel(demand.finalidade === 'aluguel' || demand.finalidade === 'ambos')
+
+      // Tipos
+      if (demand.tipo_imovel) setTiposSelecionados(demand.tipo_imovel.split(', '))
+      if (demand.subtipo) setEstadoImovel(demand.subtipo.split(', '))
+
+      // Localização
+      if (demand.estado) {
+        setEstado(demand.estado)
+        if (demand.cidade) pendingCityRef.current = demand.cidade
+      }
+      const bairroList = (locations ?? []).filter((l: any) => l.type === 'bairro').map((l: any) => l.value as string)
+      setBairros(bairroList)
+
+      // Área
+      if (demand.area_min) setAreaMin(String(demand.area_min))
+      if (demand.area_max) setAreaMax(String(demand.area_max))
+      setAreaMinPrio(demand.area_min_prio ?? null)
+      setAreaMaxPrio(demand.area_max_prio ?? null)
+
+      // Características
+      if (demand.quartos_min)   setQuartos(String(demand.quartos_min))
+      if (demand.suites_min)    setSuites(String(demand.suites_min))
+      if (demand.banheiros_min) setBanheiros(String(demand.banheiros_min))
+      if (demand.vagas_min)     setVagas(String(demand.vagas_min))
+      setQuartosPrio(demand.quartos_prio ?? null)
+      setSuitesPrio(demand.suites_prio ?? null)
+      setBanheirosPrio(demand.banheiros_prio ?? null)
+      setVagasPrio(demand.vagas_prio ?? null)
+
+      // Financeiro
+      const brl = (v: number | null) => v ? formatBRL(String(Math.round(v))) : ''
+      if (demand.valor_min) setValorMin(brl(demand.valor_min))
+      if (demand.valor_max) setValorMax(brl(demand.valor_max))
+      if (demand.cond_max)  setCondMax(brl(demand.cond_max))
+      if (demand.iptu_max)  setIptuMax(brl(demand.iptu_max))
+      setValorMinPrio(demand.valor_min_prio ?? null)
+      setValorMaxPrio(demand.valor_max_prio ?? null)
+      setCondPrio(demand.cond_prio ?? null)
+      setIptuPrio(demand.iptu_prio ?? null)
+      setAceitaFin(demand.aceita_financiamento === 'on')
+      setAceitaPerm(demand.aceita_permuta === 'on')
+
+      // Prazo + observações
+      const parsed = parseObservacoes(demand.observacoes)
+      setPrazoDef(parsed.prazoDef)
+      setPrazoValor(parsed.prazoValor)
+      setPrazoUnidade(parsed.prazoUnidade)
+      setObservacoes(parsed.obs)
+
+      // Amenidades
+      const amenImovelMap: Record<string, Prio> = {}
+      const amenCondMap: Record<string, Prio> = {}
+      for (const a of (amenidades ?? [])) {
+        if (a.amenity.startsWith('[cond] ')) {
+          amenCondMap[a.amenity.replace('[cond] ', '')] = a.priority as Prio
+        } else {
+          amenImovelMap[a.amenity] = a.priority as Prio
+        }
+      }
+      setAmenImovel(amenImovelMap)
+      setAmenCond(amenCondMap)
+
+      setInitialLoading(false)
+    }
+    load()
+  }, [id])
+
   function toggleTipo(tipo: string) {
     setTiposSelecionados(prev => {
       const next = prev.includes(tipo) ? prev.filter(t => t !== tipo) : [...prev, tipo]
-      // Reseta amenidades se ficou sem nenhum selecionado
       if (next.length === 0) { setAmenImovel({}); setAmenCond({}) }
       return next
     })
   }
 
   function toggleEstadoImovel(est: string) {
-    setEstadoImovel(prev =>
-      prev.includes(est) ? prev.filter(e => e !== est) : [...prev, est]
-    )
+    setEstadoImovel(prev => prev.includes(est) ? prev.filter(e => e !== est) : [...prev, est])
   }
 
   function addBairro(valor?: string) {
@@ -201,14 +266,11 @@ export default function NovaDemandaPage() {
     return m <= 2 ? 'alta' : m <= 6 ? 'normal' : 'baixa'
   }
 
-  // Usa o primeiro tipo selecionado como base para amenidades e condo
   const cat = tiposSelecionados.length > 0 ? getTipoCategoria(tiposSelecionados[0]) : 'Residencial'
   const showCondo = tiposSelecionados.some(t => IS_CONDO_TIPO.includes(t))
 
   function iaCls(campo: string) {
-    return iaNaoIdentificado.has(campo)
-      ? 'border-amber-400 ring-2 ring-amber-100 bg-amber-50/20'
-      : ''
+    return iaNaoIdentificado.has(campo) ? 'border-amber-400 ring-2 ring-amber-100 bg-amber-50/20' : ''
   }
 
   async function handleAnalyzeIA() {
@@ -220,7 +282,7 @@ export default function NovaDemandaPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: textoIA }),
       })
-      if (!res.ok) throw new Error('Erro na análise')
+      if (!res.ok) throw new Error()
       const data = await res.json()
       applyIaResult(data)
     } catch {
@@ -231,34 +293,18 @@ export default function NovaDemandaPage() {
   }
 
   function applyIaResult(data: Record<string, unknown>) {
-    // Finalidade
     const fin = data.finalidade as string | null
-    if (fin) {
-      setCompra(fin === 'compra' || fin === 'ambos')
-      setAluguel(fin === 'aluguel' || fin === 'ambos')
-    }
-
-    // Tipos
+    if (fin) { setCompra(fin === 'compra' || fin === 'ambos'); setAluguel(fin === 'aluguel' || fin === 'ambos') }
     const tipos = data.tipos_imovel as string[] | null
     if (tipos?.length) setTiposSelecionados(tipos)
-
-    // Localização
     const uf = data.estado as string | null
     const city = data.cidade as string | null
-    if (uf) {
-      setEstado(uf)
-      if (city) pendingCityRef.current = city
-    } else if (city) {
-      setCidadeInput(city)
-    }
-
+    if (uf) { setEstado(uf); if (city) pendingCityRef.current = city }
+    else if (city) setCidadeInput(city)
     const bairrosIA = data.bairros as string[] | null
     if (bairrosIA?.length) setBairros(bairrosIA)
-
-    // Numéricos
     const num = (v: unknown) => (v != null ? String(v) : '')
     const brl = (v: unknown) => (v != null ? formatBRL(String(Math.round(Number(v)))) : '')
-
     if (data.quartos_min)   setQuartos(num(data.quartos_min))
     if (data.suites_min)    setSuites(num(data.suites_min))
     if (data.banheiros_min) setBanheiros(num(data.banheiros_min))
@@ -270,31 +316,16 @@ export default function NovaDemandaPage() {
     if (data.cond_max)      setCondMax(brl(data.cond_max))
     if (data.iptu_max)      setIptuMax(brl(data.iptu_max))
     if (data.observacoes)   setObservacoes(data.observacoes as string)
-
-    // Campos não identificados
     const naoId = new Set<string>((data.unidentified as string[] | null) ?? [])
     setIaNaoIdentificado(naoId)
-
-    const encontrados = [
-      fin, tipos?.length, uf, city, bairrosIA?.length,
-      data.quartos_min, data.valor_max, data.area_min,
-    ].filter(Boolean).length
-
+    const encontrados = [fin, tipos?.length, uf, city, bairrosIA?.length, data.quartos_min, data.valor_max, data.area_min].filter(Boolean).length
     if (naoId.size > 0) {
-      const LABELS: Record<string, string> = {
-        finalidade: 'Finalidade',
-        tipos_imovel: 'Tipo de imóvel',
-        estado: 'Estado',
-        cidade: 'Cidade',
-      }
-      const nomes = [...naoId].map(k => LABELS[k] ?? k).join(', ')
-      setIaBanner(`✓ ${encontrados} campos identificados — os campos marcados em amarelo não foram detectados: ${nomes}`)
+      const LABELS: Record<string, string> = { finalidade: 'Finalidade', tipos_imovel: 'Tipo de imóvel', estado: 'Estado', cidade: 'Cidade' }
+      setIaBanner(`✓ ${encontrados} campos identificados — marcados em amarelo não foram detectados: ${[...naoId].map(k => LABELS[k] ?? k).join(', ')}`)
     } else {
-      setIaBanner(`✓ ${encontrados} campos identificados. Revise e publique!`)
+      setIaBanner(`✓ ${encontrados} campos identificados. Revise e salve!`)
     }
-
-    setIaAberto(false)
-    setTextoIA('')
+    setIaAberto(false); setTextoIA('')
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -303,11 +334,7 @@ export default function NovaDemandaPage() {
     if (tiposSelecionados.length === 0) { setError('Selecione pelo menos um tipo de imóvel.'); return }
     setLoading(true); setError('')
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
-
     const payload: Record<string, unknown> = {
-      broker_id: user.id,
       finalidade,
       tipo_imovel: tiposSelecionados.join(', '),
       subtipo: estadoImovel.length > 0 ? estadoImovel.join(', ') : null,
@@ -340,44 +367,47 @@ export default function NovaDemandaPage() {
         !prazoDef ? `Prazo: ${prazoValor} ${prazoUnidade}` : 'Sem prazo definido',
         observacoes,
       ].filter(Boolean).join(' | ') || null,
-      status: 'ativa',
     }
 
-    const { data: demand, error: demandError } = await supabase
-      .from('demands').insert(payload).select('id').single()
+    const { error: updateError } = await supabase.from('demands').update(payload).eq('id', id)
+    if (updateError) { setError('Erro ao salvar: ' + updateError.message); setLoading(false); return }
 
-    if (demandError) { setError('Erro ao cadastrar: ' + demandError.message); setLoading(false); return }
-
-    if (demand?.id) {
-      if (bairros.length > 0) {
-        await supabase.from('demand_locations').insert(
-          bairros.map(b => ({ demand_id: demand.id, type: 'bairro', value: b }))
-        )
-      }
-      const amenRows = [
-        ...Object.entries(amenImovel).filter(([, p]) => p).map(([a, p]) => ({ demand_id: demand.id, amenity: a, priority: p as string })),
-        ...Object.entries(amenCond).filter(([, p]) => p).map(([a, p]) => ({ demand_id: demand.id, amenity: `[cond] ${a}`, priority: p as string })),
-      ]
-      if (amenRows.length > 0) await supabase.from('demand_amenities').insert(amenRows)
+    // Re-insert locations and amenidades
+    await supabase.from('demand_locations').delete().eq('demand_id', id)
+    if (bairros.length > 0) {
+      await supabase.from('demand_locations').insert(bairros.map(b => ({ demand_id: id, type: 'bairro', value: b })))
     }
+    await supabase.from('demand_amenities').delete().eq('demand_id', id)
+    const amenRows = [
+      ...Object.entries(amenImovel).filter(([, p]) => p).map(([a, p]) => ({ demand_id: id, amenity: a, priority: p as string })),
+      ...Object.entries(amenCond).filter(([, p]) => p).map(([a, p]) => ({ demand_id: id, amenity: `[cond] ${a}`, priority: p as string })),
+    ]
+    if (amenRows.length > 0) await supabase.from('demand_amenities').insert(amenRows)
 
-    if (demand?.id) {
-      fetch(`/api/match/${demand.id}`, { method: 'POST' }).catch(() => {})
-    }
+    // Re-trigger matching
+    fetch(`/api/match/${id}`, { method: 'POST' }).catch(() => {})
 
-    router.push(`/demandas/${demand?.id ?? ''}`)
+    router.push(`/demandas/${id}`)
     router.refresh()
   }
 
-  // ---- RENDER ----
+  if (initialLoading) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-12 text-center">
+        <div className="inline-block w-6 h-6 border-2 border-stone-300 border-t-stone-700 rounded-full animate-spin" />
+        <p className="text-sm text-stone-400 mt-3">Carregando demanda…</p>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="mb-4">
-        <Link href="/demandas" className="inline-flex items-center gap-1 text-sm text-stone-400 hover:text-stone-700 mb-3">
-          ← Demandas
+        <Link href={`/demandas/${id}`} className="inline-flex items-center gap-1 text-sm text-stone-400 hover:text-stone-700 mb-3">
+          ← Demanda
         </Link>
-        <h2 className="text-xl font-medium text-stone-800">Nova demanda</h2>
-        <p className="text-sm text-stone-500 mt-0.5">Cadastre o que seu cliente está procurando</p>
+        <h2 className="text-xl font-medium text-stone-800">Editar demanda</h2>
+        <p className="text-sm text-stone-500 mt-0.5">Atualize os critérios do cliente</p>
       </div>
 
       {/* Legenda */}
@@ -388,7 +418,7 @@ export default function NovaDemandaPage() {
         <span className="px-2 py-0.5 rounded-full border border-emerald-400 bg-emerald-50 text-emerald-700">✓ Obrigatório</span>
       </div>
 
-      {/* Bloco de preenchimento por IA */}
+      {/* IA */}
       <div className="bg-white rounded-xl border border-stone-200 overflow-hidden mb-4">
         <button type="button" onClick={() => setIaAberto(v => !v)}
           className="w-full flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors text-left">
@@ -399,50 +429,36 @@ export default function NovaDemandaPage() {
             </svg>
           </div>
           <div className="flex-1">
-            <p className="text-sm font-semibold text-stone-800">Preencher com IA</p>
-            <p className="text-xs text-stone-400">Descreva a demanda em texto livre e deixe a IA identificar os campos</p>
+            <p className="text-sm font-semibold text-stone-800">Atualizar com IA</p>
+            <p className="text-xs text-stone-400">Descreva as mudanças e a IA atualiza os campos</p>
           </div>
           <svg className={`w-4 h-4 text-stone-400 transition-transform ${iaAberto ? 'rotate-180' : ''}`}
             viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="m6 9 6 6 6-6"/>
           </svg>
         </button>
-
         {iaAberto && (
           <div className="px-4 pb-4 border-t border-stone-100">
-            <p className="text-xs text-stone-500 mt-3 mb-2">
-              Exemplo: <em>"Cliente quer comprar apartamento em SP, Pinheiros ou Vila Madalena, mínimo 3 quartos, 2 vagas, até R$ 1,5 milhão"</em>
-            </p>
-            <textarea
-              value={textoIA}
-              onChange={e => setTextoIA(e.target.value)}
-              rows={4}
-              placeholder="Descreva aqui o que o cliente está procurando..."
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
-            />
-            <button type="button" onClick={handleAnalyzeIA}
-              disabled={!textoIA.trim() || iaLoading}
+            <p className="text-xs text-stone-500 mt-3 mb-2">Descreva as alterações desejadas</p>
+            <textarea value={textoIA} onChange={e => setTextoIA(e.target.value)} rows={4}
+              placeholder="Ex: cliente aumentou o orçamento para 2 milhões e agora quer pelo menos 3 vagas"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none" />
+            <button type="button" onClick={handleAnalyzeIA} disabled={!textoIA.trim() || iaLoading}
               className="mt-2 inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-60">
               {iaLoading ? (
-                <>
-                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                  </svg>
-                  Analisando…
-                </>
+                  </svg>Analisando…</>
               ) : 'Analisar com IA'}
             </button>
           </div>
         )}
       </div>
 
-      {/* Banner resultado da IA */}
       {iaBanner && (
         <div className={`flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm mb-4 border ${
-          iaNaoIdentificado.size > 0
-            ? 'bg-amber-50 border-amber-200 text-amber-800'
-            : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          iaNaoIdentificado.size > 0 ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
         }`}>
           <span className="shrink-0 mt-0.5">{iaNaoIdentificado.size > 0 ? '⚠️' : '✓'}</span>
           <span>{iaBanner}</span>
@@ -459,25 +475,19 @@ export default function NovaDemandaPage() {
             {iaNaoIdentificado.has('finalidade') && <span className="ml-2 text-xs font-normal text-amber-600">⚠ não identificado</span>}
           </h3>
           <div className="flex gap-3">
-            <button type="button" onClick={() => { setCompra(v => !v); if (!compra && !aluguel) setCompra(true) }}
+            <button type="button" onClick={() => setCompra(v => !v)}
               className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
                 compra ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-stone-600 border-stone-300 hover:border-emerald-400'
-              }`}>
-              Compra
-            </button>
-            <button type="button" onClick={() => { setAluguel(v => !v) }}
+              }`}>Compra</button>
+            <button type="button" onClick={() => setAluguel(v => !v)}
               className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
                 aluguel ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-stone-600 border-stone-300 hover:border-blue-400'
-              }`}>
-              Aluguel
-            </button>
+              }`}>Aluguel</button>
           </div>
-          {!compra && !aluguel && (
-            <p className="text-xs text-red-500 mt-2">Selecione ao menos uma finalidade.</p>
-          )}
+          {!compra && !aluguel && <p className="text-xs text-red-500 mt-2">Selecione ao menos uma finalidade.</p>}
         </div>
 
-        {/* 2 - Tipo de imóvel (seleção múltipla) */}
+        {/* 2 - Tipo de imóvel */}
         <div className={`bg-white rounded-xl border p-4 space-y-4 ${iaCls('tipos_imovel') || 'border-stone-200'}`}>
           <div>
             <h3 className="text-sm font-semibold text-stone-700">
@@ -485,11 +495,7 @@ export default function NovaDemandaPage() {
               {iaNaoIdentificado.has('tipos_imovel') && <span className="ml-2 text-xs font-normal text-amber-600">⚠ não identificado</span>}
               <span className="ml-2 text-xs font-normal text-stone-400">Pode selecionar mais de um</span>
             </h3>
-            {tiposSelecionados.length > 0 && (
-              <p className="text-xs text-emerald-700 mt-1">
-                {tiposSelecionados.join(' · ')}
-              </p>
-            )}
+            {tiposSelecionados.length > 0 && <p className="text-xs text-emerald-700 mt-1">{tiposSelecionados.join(' · ')}</p>}
           </div>
           {Object.entries(TIPOS_IMOVEL).map(([categoria, tipos]) => (
             <div key={categoria}>
@@ -498,9 +504,7 @@ export default function NovaDemandaPage() {
                 {tipos.map(tipo => (
                   <button key={tipo} type="button" onClick={() => toggleTipo(tipo)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                      tiposSelecionados.includes(tipo)
-                        ? 'bg-emerald-700 text-white border-emerald-700'
-                        : 'bg-white text-stone-600 border-stone-300 hover:border-emerald-400'
+                      tiposSelecionados.includes(tipo) ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-stone-600 border-stone-300 hover:border-emerald-400'
                     }`}>
                     {tiposSelecionados.includes(tipo) && '✓ '}{tipo}
                   </button>
@@ -508,17 +512,13 @@ export default function NovaDemandaPage() {
               </div>
             </div>
           ))}
-
-          {/* Estado do imóvel (substituiu subtipo) */}
           <div>
             <p className="text-xs text-stone-400 font-medium uppercase tracking-wider mb-1.5">Estado do imóvel</p>
             <div className="flex flex-wrap gap-2">
               {ESTADOS_IMOVEL.map(est => (
                 <button key={est} type="button" onClick={() => toggleEstadoImovel(est)}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                    estadoImovel.includes(est)
-                      ? 'bg-stone-700 text-white border-stone-700'
-                      : 'bg-white text-stone-600 border-stone-300 hover:border-stone-500'
+                    estadoImovel.includes(est) ? 'bg-stone-700 text-white border-stone-700' : 'bg-white text-stone-600 border-stone-300 hover:border-stone-500'
                   }`}>
                   {estadoImovel.includes(est) && '✓ '}{est}
                 </button>
@@ -541,8 +541,6 @@ export default function NovaDemandaPage() {
               {ESTADOS.map(e => <option key={e.uf} value={e.uf}>{e.nome}</option>)}
             </select>
           </div>
-
-          {/* Cidade */}
           <div className="relative">
             <label className="block text-xs text-stone-500 mb-1">
               Cidade {loadingCidades && <span className="text-stone-400">(carregando...)</span>}
@@ -561,8 +559,6 @@ export default function NovaDemandaPage() {
               </div>
             )}
           </div>
-
-          {/* Bairros com autocomplete */}
           <div ref={bairroRef}>
             <label className="block text-xs text-stone-500 mb-1">Bairros</label>
             {bairros.length > 0 && (
@@ -577,10 +573,7 @@ export default function NovaDemandaPage() {
             )}
             <div className="relative">
               <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={bairroInput}
-                  onChange={e => setBairroInput(e.target.value)}
+                <input type="text" value={bairroInput} onChange={e => setBairroInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addBairro() } }}
                   placeholder="Digite o bairro"
                   className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
@@ -590,8 +583,7 @@ export default function NovaDemandaPage() {
               {bairroSuggestions.length > 0 && (
                 <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg overflow-hidden">
                   {bairroSuggestions.map(b => (
-                    <button key={b} type="button"
-                      onMouseDown={e => { e.preventDefault(); addBairro(b) }}
+                    <button key={b} type="button" onMouseDown={e => { e.preventDefault(); addBairro(b) }}
                       className="w-full text-left px-3 py-2 text-sm text-stone-700 hover:bg-emerald-50 hover:text-emerald-800 border-b border-stone-100 last:border-0">
                       📍 {b}
                     </button>
@@ -599,7 +591,7 @@ export default function NovaDemandaPage() {
                 </div>
               )}
             </div>
-            <p className="text-xs text-stone-400 mt-1.5">Digite parte do nome e selecione, ou pressione Enter para adicionar</p>
+            <p className="text-xs text-stone-400 mt-1.5">Digite parte do nome e selecione, ou pressione Enter</p>
           </div>
         </div>
 
@@ -607,26 +599,23 @@ export default function NovaDemandaPage() {
         <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
           <h3 className="text-sm font-semibold text-stone-700">Área (m²)</h3>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-stone-500">Mínimo</label>
-                <PrioChip value={areaMinPrio} onToggle={() => setAreaMinPrio(nextPrio(areaMinPrio))} />
+            {[
+              { label: 'Mínimo', val: areaMin, setVal: setAreaMin, prio: areaMinPrio, setPrio: setAreaMinPrio },
+              { label: 'Máximo', val: areaMax, setVal: setAreaMax, prio: areaMaxPrio, setPrio: setAreaMaxPrio },
+            ].map(({ label, val, setVal, prio, setPrio }) => (
+              <div key={label}>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-stone-500">{label}</label>
+                  <PrioChip value={prio} onToggle={() => setPrio(nextPrio(prio))} />
+                </div>
+                <input type="number" min="0" value={val} onChange={e => setVal(e.target.value)}
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="—" />
               </div>
-              <input type="number" min="0" value={areaMin} onChange={e => setAreaMin(e.target.value)}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="—" />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-stone-500">Máximo</label>
-                <PrioChip value={areaMaxPrio} onToggle={() => setAreaMaxPrio(nextPrio(areaMaxPrio))} />
-              </div>
-              <input type="number" min="0" value={areaMax} onChange={e => setAreaMax(e.target.value)}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="—" />
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* 5 - Características do imóvel */}
+        {/* 5 - Características */}
         <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-4">
           <h3 className="text-sm font-semibold text-stone-700">Características do imóvel</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -654,53 +643,41 @@ export default function NovaDemandaPage() {
           <div>
             <p className="text-xs text-stone-400 font-medium uppercase tracking-wider mb-2">Valor do imóvel (R$)</p>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-stone-500">Mínimo</label>
-                  <PrioChip value={valorMinPrio} onToggle={() => setValorMinPrio(nextPrio(valorMinPrio))} />
+              {[
+                { label: 'Mínimo', val: valorMin, setVal: setValorMin, prio: valorMinPrio, setPrio: setValorMinPrio },
+                { label: 'Máximo', val: valorMax, setVal: setValorMax, prio: valorMaxPrio, setPrio: setValorMaxPrio },
+              ].map(({ label, val, setVal, prio, setPrio }) => (
+                <div key={label}>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-stone-500">{label}</label>
+                    <PrioChip value={prio} onToggle={() => setPrio(nextPrio(prio))} />
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
+                    <input type="text" inputMode="numeric" value={val} onChange={e => setVal(formatBRL(e.target.value))}
+                      className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="0" />
+                  </div>
                 </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
-                  <input type="text" inputMode="numeric" value={valorMin} onChange={e => setValorMin(formatBRL(e.target.value))}
-                    className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="0" />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs text-stone-500">Máximo</label>
-                  <PrioChip value={valorMaxPrio} onToggle={() => setValorMaxPrio(nextPrio(valorMaxPrio))} />
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
-                  <input type="text" inputMode="numeric" value={valorMax} onChange={e => setValorMax(formatBRL(e.target.value))}
-                    className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="0" />
-                </div>
-              </div>
+              ))}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-stone-500">Condomínio máx.</label>
-                <PrioChip value={condPrio} onToggle={() => setCondPrio(nextPrio(condPrio))} />
+            {[
+              { label: 'Condomínio máx.', val: condMax, setVal: setCondMax, prio: condPrio, setPrio: setCondPrio },
+              { label: 'IPTU máx.', val: iptuMax, setVal: setIptuMax, prio: iptuPrio, setPrio: setIptuPrio },
+            ].map(({ label, val, setVal, prio, setPrio }) => (
+              <div key={label}>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-stone-500">{label}</label>
+                  <PrioChip value={prio} onToggle={() => setPrio(nextPrio(prio))} />
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
+                  <input type="text" inputMode="numeric" value={val} onChange={e => setVal(formatBRL(e.target.value))}
+                    className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="0" />
+                </div>
               </div>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
-                <input type="text" inputMode="numeric" value={condMax} onChange={e => setCondMax(formatBRL(e.target.value))}
-                  className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="0" />
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-stone-500">IPTU máx.</label>
-                <PrioChip value={iptuPrio} onToggle={() => setIptuPrio(nextPrio(iptuPrio))} />
-              </div>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
-                <input type="text" inputMode="numeric" value={iptuMax} onChange={e => setIptuMax(formatBRL(e.target.value))}
-                  className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="0" />
-              </div>
-            </div>
+            ))}
           </div>
           {(finalidade === 'compra' || finalidade === 'ambos') && (
             <div className="flex flex-wrap gap-4 pt-1">
@@ -716,7 +693,7 @@ export default function NovaDemandaPage() {
           )}
         </div>
 
-        {/* 7 - Amenidades do imóvel */}
+        {/* 7 - Amenidades imóvel */}
         {tiposSelecionados.length > 0 && AMEN_IMOVEL[cat]?.length > 0 && (
           <div className="bg-white rounded-xl border border-stone-200 p-4">
             <h3 className="text-sm font-semibold text-stone-700 mb-1">Características do imóvel</h3>
@@ -730,7 +707,7 @@ export default function NovaDemandaPage() {
           </div>
         )}
 
-        {/* 8 - Amenidades do condomínio */}
+        {/* 8 - Amenidades condomínio */}
         {showCondo && AMEN_COND[cat]?.length > 0 && (
           <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-4">
             <div>
@@ -806,12 +783,12 @@ export default function NovaDemandaPage() {
         </div>
 
         <div className="flex gap-3 pb-8">
-          <Link href="/demandas" className="flex-1 text-center py-2.5 rounded-lg border border-stone-300 text-sm text-stone-600 hover:bg-stone-50 transition-colors">
+          <Link href={`/demandas/${id}`} className="flex-1 text-center py-2.5 rounded-lg border border-stone-300 text-sm text-stone-600 hover:bg-stone-50 transition-colors">
             Cancelar
           </Link>
           <button type="submit" disabled={loading || !estado || tiposSelecionados.length === 0}
             className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-60">
-            {loading ? 'Publicando...' : 'Publicar demanda'}
+            {loading ? 'Salvando...' : 'Salvar alterações'}
           </button>
         </div>
       </form>
