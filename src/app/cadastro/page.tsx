@@ -11,6 +11,8 @@ export default function CadastroPage() {
   const [password, setPassword] = useState('')
   const [creci, setCreci] = useState('')
   const [phone, setPhone] = useState('')
+  const [imobiliaria, setImobiliaria] = useState('')
+  const [autonomo, setAutonomo] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [confirmEmail, setConfirmEmail] = useState(false)
@@ -19,6 +21,9 @@ export default function CadastroPage() {
 
   async function handleCadastro(e: React.FormEvent) {
     e.preventDefault()
+    if (!phone) { setError('WhatsApp é obrigatório.'); return }
+    if (!autonomo && !imobiliaria) { setError('Informe a imobiliária ou marque "Sou autônomo".'); return }
+
     setLoading(true)
     setError('')
 
@@ -37,18 +42,19 @@ export default function CadastroPage() {
       return
     }
 
-    // Se não há sessão, Supabase exige confirmação de email
     if (!data.session) {
       setConfirmEmail(true)
       setLoading(false)
       return
     }
 
-    // Sessão ativa (confirmação desabilitada) — atualiza perfil e redireciona
     if (data.user) {
-      if (creci || phone) {
-        await supabase.from('profiles').update({ creci, phone }).eq('id', data.user.id)
-      }
+      await supabase.from('profiles').update({
+        creci,
+        phone,
+        imobiliaria: autonomo ? null : imobiliaria,
+        autonomo,
+      }).eq('id', data.user.id)
     }
 
     router.push('/demandas')
@@ -65,15 +71,11 @@ export default function CadastroPage() {
           </h1>
           <h2 className="text-lg font-medium text-stone-800 mb-2">Confirme seu email</h2>
           <p className="text-sm text-stone-500 mb-6">
-            Enviamos um link de confirmação para <strong className="text-stone-700">{email}</strong>.
-            Clique no link para ativar sua conta.
+            Enviamos um link para <strong className="text-stone-700">{email}</strong>. Clique para ativar sua conta.
           </p>
           <p className="text-xs text-stone-400">
             Não recebeu?{' '}
-            <button
-              onClick={() => setConfirmEmail(false)}
-              className="text-emerald-700 hover:underline"
-            >
+            <button onClick={() => setConfirmEmail(false)} className="text-emerald-700 hover:underline">
               Tentar novamente
             </button>
           </p>
@@ -104,41 +106,59 @@ export default function CadastroPage() {
           <div>
             <label className="block text-sm font-medium text-stone-700 mb-1">Nome completo</label>
             <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} required
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
               placeholder="João Silva" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
               placeholder="seu@email.com" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-stone-700 mb-1">Senha</label>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
               placeholder="mínimo 6 caracteres" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">
-                CRECI <span className="text-stone-400 font-normal">(opcional)</span>
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-1">
+              WhatsApp <span className="text-red-500">*</span>
+            </label>
+            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="(11) 99999-9999" />
+          </div>
+
+          {/* Imobiliária + Autônomo */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-stone-700">
+                Imobiliária <span className="text-red-500">*</span>
               </label>
-              <input type="text" value={creci} onChange={e => setCreci(e.target.value)}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                placeholder="12345-F" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">
-                WhatsApp <span className="text-stone-400 font-normal">(opcional)</span>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" checked={autonomo} onChange={e => setAutonomo(e.target.checked)}
+                  className="w-4 h-4 accent-emerald-600 rounded" />
+                <span className="text-sm text-stone-600">Sou autônomo</span>
               </label>
-              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)}
-                className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                placeholder="(11) 99999-9999" />
             </div>
+            <input type="text" value={imobiliaria} onChange={e => setImobiliaria(e.target.value)}
+              disabled={autonomo}
+              required={!autonomo}
+              placeholder={autonomo ? 'Autônomo' : 'Nome da imobiliária'}
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50 disabled:text-stone-400" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-1">
+              CRECI <span className="text-stone-400 font-normal">(opcional)</span>
+            </label>
+            <input type="text" value={creci} onChange={e => setCreci(e.target.value)}
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="12345-F" />
           </div>
 
           <button type="submit" disabled={loading}

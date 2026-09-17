@@ -4,6 +4,7 @@ import Link from 'next/link'
 import MatchTrigger from '@/components/MatchTrigger'
 import MatchCard from '@/components/MatchCard'
 import SaveButton from '@/components/SaveButton'
+import DemandActions from '@/components/DemandActions'
 import { getPortalSearchUrls } from '@/lib/matching/runner'
 import type { DemandForMatch } from '@/lib/matching/types'
 
@@ -199,6 +200,7 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
               )}
             </div>
             {isOwner && <MatchTrigger demandId={id} lastJob={lastJob} />}
+            {isOwner && <DemandActions demandId={id} />}
           </div>
         </div>
       </div>

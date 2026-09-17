@@ -23,6 +23,10 @@ function periodoToDate(periodo: string): Date | null {
   }
 }
 
+function diasDesde(dateStr: string) {
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86_400_000)
+}
+
 interface SearchParams {
   finalidade?: string; tipo?: string; quartos?: string; bairro?: string
   cidade?: string; valor_max?: string; area_min?: string; vpm2_max?: string
@@ -42,10 +46,9 @@ export default async function DemandasPage({ searchParams }: { searchParams: Pro
 
   let query = supabase
     .from('demands')
-    .select('id, broker_id, finalidade, tipo_imovel, cidade, estado, area_min, area_max, quartos_min, vagas_min, valor_min, valor_max, cond_max, status, created_at, profiles(full_name)')
+    .select('id, broker_id, finalidade, tipo_imovel, cidade, estado, area_min, area_max, quartos_min, vagas_min, valor_min, valor_max, cond_max, status, created_at, profiles(full_name, avatar_url, imobiliaria, autonomo)')
     .eq('status', 'ativa')
 
-  // Filtros DB
   if (filters.finalidade) query = query.eq('finalidade', filters.finalidade)
   if (filters.tipo)       query = query.eq('tipo_imovel', filters.tipo)
   if (filters.quartos)    query = query.gte('quartos_min', Number(filters.quartos))
@@ -98,10 +101,11 @@ export default async function DemandasPage({ searchParams }: { searchParams: Pro
     })
   }
 
-  // Título da seção baseado no filtro ativo
   const pageTitle = filters.minhas ? 'Minhas demandas'
     : filters.salvas ? 'Meus favoritos'
     : 'Demandas'
+
+  const isMinhas = !!filters.minhas
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
@@ -130,10 +134,22 @@ export default async function DemandasPage({ searchParams }: { searchParams: Pro
             const isSaved = savedSet.has(d.id)
             const dt = new Date(d.created_at)
             const dataFormatada = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+            const dias = diasDesde(d.created_at)
+            const alerta30 = isMinhas && dias >= 30
+            const profile = d.profiles as any
+            const imobLabel = profile?.autonomo ? 'Autônomo' : (profile?.imobiliaria || '')
 
             return (
               <Link key={d.id} href={`/demandas/${d.id}`}
-                className="bg-white rounded-xl border border-stone-200 p-4 hover:shadow-md hover:border-stone-300 transition-all block group">
+                className={`bg-white rounded-xl border p-4 hover:shadow-md hover:border-stone-300 transition-all block group ${
+                  alerta30 ? 'border-amber-300' : 'border-stone-200'
+                }`}>
+
+                {alerta30 && (
+                  <div className="flex items-center gap-1.5 bg-amber-50 text-amber-700 text-xs font-medium px-2.5 py-1.5 rounded-lg mb-2 border border-amber-200">
+                    ⚠️ Demanda com {dias} dias — ainda ativa?
+                  </div>
+                )}
 
                 <div className="flex items-start justify-between mb-2 gap-2">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -191,14 +207,28 @@ export default async function DemandasPage({ searchParams }: { searchParams: Pro
                   )}
                 </div>
 
-                <div className="mt-2 flex items-center justify-between">
-                  {d.profiles && (
-                    <span className="text-xs text-stone-400">{(d.profiles as any).full_name}</span>
-                  )}
-                  <span className="text-xs text-emerald-700 font-medium group-hover:underline ml-auto">
-                    Ver detalhes →
-                  </span>
-                </div>
+                {/* Corretor: avatar + nome + imobiliária */}
+                {profile && (
+                  <div className="mt-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold shrink-0 overflow-hidden border border-stone-100">
+                        {profile.avatar_url
+                          ? <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover" />
+                          : profile.full_name?.charAt(0).toUpperCase()
+                        }
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-xs text-stone-500 truncate block">{profile.full_name}</span>
+                        {imobLabel && (
+                          <span className="text-xs text-stone-400 truncate block">{imobLabel}</span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-xs text-emerald-700 font-medium group-hover:underline ml-auto shrink-0">
+                      Ver →
+                    </span>
+                  </div>
+                )}
               </Link>
             )
           })}
