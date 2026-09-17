@@ -155,6 +155,14 @@ export default function NovaDemandaPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // ── IA: preenchimento por texto ──
+  const [textoIA, setTextoIA] = useState('')
+  const [iaLoading, setIaLoading] = useState(false)
+  const [iaAberto, setIaAberto] = useState(false)
+  const [iaBanner, setIaBanner] = useState<string | null>(null)
+  const [iaNaoIdentificado, setIaNaoIdentificado] = useState<Set<string>>(new Set())
+  const pendingCityRef = useRef<string | null>(null)
+
   // Tipos de imóvel — seleção múltipla
   const [tiposSelecionados, setTiposSelecionados] = useState<string[]>([])
 
@@ -219,7 +227,14 @@ export default function NovaDemandaPage() {
     setLoadingCidades(true); setCidadeInput('')
     fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${estado}/municipios?orderBy=nome`)
       .then(r => r.json())
-      .then((d: { nome: string }[]) => { setCidades(d.map(x => x.nome)); setLoadingCidades(false) })
+      .then((d: { nome: string }[]) => {
+        setCidades(d.map(x => x.nome))
+        setLoadingCidades(false)
+        if (pendingCityRef.current) {
+          setCidadeInput(pendingCityRef.current)
+          pendingCityRef.current = null
+        }
+      })
       .catch(() => setLoadingCidades(false))
   }, [estado])
 
@@ -291,6 +306,98 @@ export default function NovaDemandaPage() {
   // Usa o primeiro tipo selecionado como base para amenidades e condo
   const cat = tiposSelecionados.length > 0 ? getTipoCategoria(tiposSelecionados[0]) : 'Residencial'
   const showCondo = tiposSelecionados.some(t => IS_CONDO_TIPO.includes(t))
+
+  function iaCls(campo: string) {
+    return iaNaoIdentificado.has(campo)
+      ? 'border-amber-400 ring-2 ring-amber-100 bg-amber-50/20'
+      : ''
+  }
+
+  async function handleAnalyzeIA() {
+    if (!textoIA.trim()) return
+    setIaLoading(true)
+    try {
+      const res = await fetch('/api/ai/extract-demand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: textoIA }),
+      })
+      if (!res.ok) throw new Error('Erro na análise')
+      const data = await res.json()
+      applyIaResult(data)
+    } catch {
+      setIaBanner('⚠️ Não foi possível analisar o texto. Tente novamente.')
+    } finally {
+      setIaLoading(false)
+    }
+  }
+
+  function applyIaResult(data: Record<string, unknown>) {
+    // Finalidade
+    const fin = data.finalidade as string | null
+    if (fin) {
+      setCompra(fin === 'compra' || fin === 'ambos')
+      setAluguel(fin === 'aluguel' || fin === 'ambos')
+    }
+
+    // Tipos
+    const tipos = data.tipos_imovel as string[] | null
+    if (tipos?.length) setTiposSelecionados(tipos)
+
+    // Localização
+    const uf = data.estado as string | null
+    const city = data.cidade as string | null
+    if (uf) {
+      setEstado(uf)
+      if (city) pendingCityRef.current = city
+    } else if (city) {
+      setCidadeInput(city)
+    }
+
+    const bairrosIA = data.bairros as string[] | null
+    if (bairrosIA?.length) setBairros(bairrosIA)
+
+    // Numéricos
+    const num = (v: unknown) => (v != null ? String(v) : '')
+    const brl = (v: unknown) => (v != null ? formatBRL(String(Math.round(Number(v)))) : '')
+
+    if (data.quartos_min)   setQuartos(num(data.quartos_min))
+    if (data.suites_min)    setSuites(num(data.suites_min))
+    if (data.banheiros_min) setBanheiros(num(data.banheiros_min))
+    if (data.vagas_min)     setVagas(num(data.vagas_min))
+    if (data.area_min)      setAreaMin(num(data.area_min))
+    if (data.area_max)      setAreaMax(num(data.area_max))
+    if (data.valor_min)     setValorMin(brl(data.valor_min))
+    if (data.valor_max)     setValorMax(brl(data.valor_max))
+    if (data.cond_max)      setCondMax(brl(data.cond_max))
+    if (data.iptu_max)      setIptuMax(brl(data.iptu_max))
+    if (data.observacoes)   setObservacoes(data.observacoes as string)
+
+    // Campos não identificados
+    const naoId = new Set<string>((data.unidentified as string[] | null) ?? [])
+    setIaNaoIdentificado(naoId)
+
+    const encontrados = [
+      fin, tipos?.length, uf, city, bairrosIA?.length,
+      data.quartos_min, data.valor_max, data.area_min,
+    ].filter(Boolean).length
+
+    if (naoId.size > 0) {
+      const LABELS: Record<string, string> = {
+        finalidade: 'Finalidade',
+        tipos_imovel: 'Tipo de imóvel',
+        estado: 'Estado',
+        cidade: 'Cidade',
+      }
+      const nomes = [...naoId].map(k => LABELS[k] ?? k).join(', ')
+      setIaBanner(`✓ ${encontrados} campos identificados — os campos marcados em amarelo não foram detectados: ${nomes}`)
+    } else {
+      setIaBanner(`✓ ${encontrados} campos identificados. Revise e publique!`)
+    }
+
+    setIaAberto(false)
+    setTextoIA('')
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -383,12 +490,76 @@ export default function NovaDemandaPage() {
         <span className="px-2 py-0.5 rounded-full border border-emerald-400 bg-emerald-50 text-emerald-700">✓ Obrigatório</span>
       </div>
 
+      {/* Bloco de preenchimento por IA */}
+      <div className="bg-white rounded-xl border border-stone-200 overflow-hidden mb-4">
+        <button type="button" onClick={() => setIaAberto(v => !v)}
+          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors text-left">
+          <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center shrink-0">
+            <svg className="w-4 h-4 text-emerald-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2z"/>
+              <path d="M12 16v-4M12 8h.01"/>
+            </svg>
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-stone-800">Preencher com IA</p>
+            <p className="text-xs text-stone-400">Descreva a demanda em texto livre e deixe a IA identificar os campos</p>
+          </div>
+          <svg className={`w-4 h-4 text-stone-400 transition-transform ${iaAberto ? 'rotate-180' : ''}`}
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="m6 9 6 6 6-6"/>
+          </svg>
+        </button>
+
+        {iaAberto && (
+          <div className="px-4 pb-4 border-t border-stone-100">
+            <p className="text-xs text-stone-500 mt-3 mb-2">
+              Exemplo: <em>"Cliente quer comprar apartamento em SP, Pinheiros ou Vila Madalena, mínimo 3 quartos, 2 vagas, até R$ 1,5 milhão"</em>
+            </p>
+            <textarea
+              value={textoIA}
+              onChange={e => setTextoIA(e.target.value)}
+              rows={4}
+              placeholder="Descreva aqui o que o cliente está procurando..."
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
+            />
+            <button type="button" onClick={handleAnalyzeIA}
+              disabled={!textoIA.trim() || iaLoading}
+              className="mt-2 inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-60">
+              {iaLoading ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  Analisando…
+                </>
+              ) : 'Analisar com IA'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Banner resultado da IA */}
+      {iaBanner && (
+        <div className={`flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm mb-4 border ${
+          iaNaoIdentificado.size > 0
+            ? 'bg-amber-50 border-amber-200 text-amber-800'
+            : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+        }`}>
+          <span className="shrink-0 mt-0.5">{iaNaoIdentificado.size > 0 ? '⚠️' : '✓'}</span>
+          <span>{iaBanner}</span>
+          <button type="button" onClick={() => setIaBanner(null)} className="ml-auto text-stone-400 hover:text-stone-600 shrink-0">×</button>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
 
         {/* 1 - Finalidade */}
-        <div className="bg-white rounded-xl border border-stone-200 p-4">
-          <h3 className="text-sm font-semibold text-stone-700 mb-3">Finalidade</h3>
+        <div className={`bg-white rounded-xl border p-4 ${iaCls('finalidade') || 'border-stone-200'}`}>
+          <h3 className="text-sm font-semibold text-stone-700 mb-3">Finalidade
+            {iaNaoIdentificado.has('finalidade') && <span className="ml-2 text-xs font-normal text-amber-600">⚠ não identificado</span>}
+          </h3>
           <div className="flex gap-3">
             <button type="button" onClick={() => { setCompra(v => !v); if (!compra && !aluguel) setCompra(true) }}
               className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
@@ -409,10 +580,11 @@ export default function NovaDemandaPage() {
         </div>
 
         {/* 2 - Tipo de imóvel (seleção múltipla) */}
-        <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-4">
+        <div className={`bg-white rounded-xl border p-4 space-y-4 ${iaCls('tipos_imovel') || 'border-stone-200'}`}>
           <div>
             <h3 className="text-sm font-semibold text-stone-700">
               Tipo de imóvel <span className="text-red-400">*</span>
+              {iaNaoIdentificado.has('tipos_imovel') && <span className="ml-2 text-xs font-normal text-amber-600">⚠ não identificado</span>}
               <span className="ml-2 text-xs font-normal text-stone-400">Pode selecionar mais de um</span>
             </h3>
             {tiposSelecionados.length > 0 && (
@@ -461,9 +633,12 @@ export default function NovaDemandaPage() {
         <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
           <h3 className="text-sm font-semibold text-stone-700">Localização</h3>
           <div>
-            <label className="block text-xs text-stone-500 mb-1">Estado <span className="text-red-400">*</span></label>
+            <label className="block text-xs text-stone-500 mb-1">
+              Estado <span className="text-red-400">*</span>
+              {iaNaoIdentificado.has('estado') && <span className="ml-2 text-amber-600">⚠ não identificado</span>}
+            </label>
             <select value={estado} onChange={e => setEstado(e.target.value)} required
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white">
+              className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white ${iaCls('estado') || 'border-stone-300'}`}>
               <option value="">Selecione o estado</option>
               {ESTADOS.map(e => <option key={e.uf} value={e.uf}>{e.nome}</option>)}
             </select>
@@ -473,11 +648,12 @@ export default function NovaDemandaPage() {
           <div className="relative">
             <label className="block text-xs text-stone-500 mb-1">
               Cidade {loadingCidades && <span className="text-stone-400">(carregando...)</span>}
+              {iaNaoIdentificado.has('cidade') && <span className="ml-2 text-amber-600">⚠ não identificado</span>}
             </label>
             <input type="text" value={cidadeInput} onChange={e => setCidadeInput(e.target.value)}
               disabled={!estado || loadingCidades}
               placeholder={!estado ? 'Selecione o estado primeiro' : 'Digite a cidade'}
-              className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-stone-50 disabled:text-stone-400" />
+              className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-stone-50 disabled:text-stone-400 ${iaCls('cidade') || 'border-stone-300'}`} />
             {cidadeSuggestions.length > 0 && (
               <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg overflow-hidden">
                 {cidadeSuggestions.map(c => (
