@@ -5,6 +5,7 @@ import MatchTrigger from '@/components/MatchTrigger'
 import MatchCard from '@/components/MatchCard'
 import SaveButton from '@/components/SaveButton'
 import DemandActions from '@/components/DemandActions'
+import NonstopSearch from '@/components/NonstopSearch'
 import { getPortalSearchUrls } from '@/lib/matching/runner'
 import type { DemandForMatch } from '@/lib/matching/types'
 
@@ -303,6 +304,23 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
         </div>
         <p className="text-xs text-stone-400 mt-2">Abre a busca filtrada em cada portal</p>
       </Section>
+
+      {process.env.NONSTOP_API_TOKEN && (
+        <Section title="Imóveis na Nonstop">
+          <NonstopSearch
+            finalidade={demand.finalidade}
+            tipo_imovel={demand.tipo_imovel}
+            cidade={demand.cidade}
+            estado={demand.estado}
+            bairros={bairros}
+            quartos_min={demand.quartos_min}
+            vagas_min={demand.vagas_min}
+            valor_max={demand.valor_max}
+            area_min={demand.area_min}
+            cond_max={demand.cond_max}
+          />
+        </Section>
+      )}
 
       <div>
         <div className="flex items-center justify-between mb-3">
