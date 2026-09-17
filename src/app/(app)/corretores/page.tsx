@@ -67,11 +67,9 @@ export default function CorretoresPage() {
                 }
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-stone-800 truncate group-hover:text-emerald-700 transition-colors">
-                  {b.full_name}
-                </p>
-                <p className="text-xs text-stone-400 truncate">
-                  {b.autonomo ? 'Autônomo' : (b.imobiliaria || 'Imobiliária não informada')}
+                <p className="font-semibold text-blue-900 truncate">{b.full_name}</p>
+                <p className="text-xs font-medium text-blue-700 truncate">
+                  {b.autonomo ? 'Autônomo' : (b.imobiliaria || '')}
                 </p>
                 {b.creci && (
                   <p className="text-xs text-stone-300">CRECI {b.creci}</p>

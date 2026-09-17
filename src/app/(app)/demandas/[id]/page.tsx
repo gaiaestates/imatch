@@ -23,26 +23,22 @@ function fmtBRL(v: number | null) {
   return `R$ ${v}`
 }
 
-function PrioLabel({ p }: { p: string | null }) {
+function PrioDot({ p }: { p: string | null | undefined }) {
   if (!p) return null
-  return (
-    <span className={`ml-2 text-xs px-1.5 py-0.5 rounded font-medium ${
-      p === 'req' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-600'
-    }`}>
-      {p === 'req' ? 'Obrigatório' : 'Preferencial'}
-    </span>
-  )
+  return p === 'req'
+    ? <span title="Obrigatório" className="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-2 shrink-0" />
+    : <span title="Preferencial" className="inline-block w-2 h-2 rounded-full bg-amber-400 mr-2 shrink-0" />
 }
 
 function Row({ label, value, prio }: { label: string; value: string | null; prio?: string | null }) {
   if (!value) return null
   return (
     <div className="flex items-center justify-between py-2.5 border-b border-stone-100 last:border-0">
-      <span className="text-sm text-stone-500">{label}</span>
       <div className="flex items-center">
-        <span className="text-sm font-medium text-stone-800">{value}</span>
-        {prio && <PrioLabel p={prio} />}
+        <PrioDot p={prio} />
+        <span className="text-sm text-stone-500">{label}</span>
       </div>
+      <span className="text-sm font-medium text-stone-800">{value}</span>
     </div>
   )
 }
@@ -55,7 +51,7 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
 
   const { data: demand } = await supabase
     .from('demands')
-    .select('*, profiles(full_name, phone, creci)')
+    .select('*, profiles(full_name, phone, creci, avatar_url, imobiliaria, autonomo)')
     .eq('id', id)
     .single()
 
@@ -86,6 +82,7 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
   const profile = demand.profiles as any
   const corretorNome = profile?.full_name ?? 'o corretor'
   const corretorPhone = profile?.phone ?? ''
+  const imobLabel = profile?.autonomo ? 'Autônomo' : (profile?.imobiliaria ?? '')
   const bairrosMsgParts = locations?.filter((l: any) => l.type === 'bairro').map((l: any) => l.value) ?? []
   const locMsg = [...bairrosMsgParts, demand.cidade].filter(Boolean).join(', ')
   const valorMsg = demand.valor_max ? ` até R$ ${Number(demand.valor_max).toLocaleString('pt-BR')}` : ''
@@ -175,16 +172,26 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
             )}
             <p className="text-xs text-stone-400 mt-1.5">
               Cadastrada em {dataFormatada}
-              {demand.profiles && (
-                <> · Por{' '}
+            </p>
+            {demand.profiles && (
+              <div className="flex items-center gap-2 mt-2">
+                {profile?.avatar_url
+                  ? <img src={profile.avatar_url} alt={corretorNome} className="w-7 h-7 rounded-full object-cover border border-stone-100 shrink-0" />
+                  : <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold shrink-0">{corretorNome.charAt(0).toUpperCase()}</div>
+                }
+                <div className="flex items-center gap-1 flex-wrap">
                   <Link href={`/corretores/${demand.broker_id}`}
-                    className="font-medium text-stone-600 hover:text-emerald-700 hover:underline">
+                    className="text-sm font-semibold text-blue-900 hover:underline">
                     {corretorNome}
                   </Link>
-                  {profile?.creci && <span className="text-stone-400"> · CRECI {profile.creci}</span>}
-                </>
-              )}
-            </p>
+                  {imobLabel && (
+                    <><span className="text-stone-300 text-sm">|</span>
+                    <span className="text-sm text-blue-800">{imobLabel}</span></>
+                  )}
+                  {profile?.creci && <span className="text-xs text-stone-400 ml-1">· CRECI {profile.creci}</span>}
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
             <div className="flex items-center gap-2">
@@ -205,8 +212,17 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      {/* ── CRITÉRIOS NUMÉRICOS ── */}
+      {/* ── CRITÉRIOS ── */}
       <Section title="Critérios">
+        {/* legend */}
+        <div className="flex items-center gap-4 text-xs text-stone-400 mb-3">
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> Obrigatório</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> Preferencial</span>
+        </div>
+        <Row label="Tipo de imóvel"    value={demand.tipo_imovel} />
+        {bairros.length > 0 && (
+          <Row label="Bairros" value={bairros.join(', ')} />
+        )}
         <Row label="Quartos mínimos"   value={demand.quartos_min  ? `${demand.quartos_min}+`  : null} prio={demand.quartos_prio} />
         <Row label="Suítes mínimas"    value={demand.suites_min   ? `${demand.suites_min}+`   : null} prio={demand.suites_prio} />
         <Row label="Banheiros mínimos" value={demand.banheiros_min ? `${demand.banheiros_min}+` : null} prio={demand.banheiros_prio} />
@@ -220,11 +236,9 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
       </Section>
 
       {/* ── CONDIÇÕES ── */}
-      {(demand.aceita_financiamento || demand.aceita_permuta || demand.prazo_meses || demand.subtipo) && (
+      {(demand.prazo_meses || demand.subtipo) && (
         <Section title="Condições">
           {demand.subtipo && <Row label="Subtipo" value={demand.subtipo} />}
-          <Row label="Aceita financiamento" value={demand.aceita_financiamento === 'on' ? 'Sim' : demand.aceita_financiamento === 'off' ? 'Não' : null} />
-          <Row label="Aceita permuta"       value={demand.aceita_permuta === 'on' ? 'Sim' : demand.aceita_permuta === 'off' ? 'Não' : null} />
           {demand.prazo_meses && (
             <Row label="Prazo"
               value={`${demand.prazo_meses} ${demand.prazo_meses === 1 ? 'mês' : 'meses'}${demand.prazo_unidade === 'anos' ? ` (${Math.round(demand.prazo_meses / 12)} anos)` : ''}`}
@@ -332,11 +346,8 @@ function AmenList({ items, strip }: { items: any[]; strip?: boolean }) {
         const label = strip ? a.amenity.replace('[cond] ', '') : a.amenity
         return (
           <div key={a.amenity} className="flex items-center gap-2 text-sm">
-            <span className={a.priority === 'req' ? 'text-emerald-600' : 'text-amber-500'}>
-              {a.priority === 'req' ? '✓' : '★'}
-            </span>
+            <PrioDot p={a.priority} />
             <span className="text-stone-700">{label}</span>
-            <PrioLabel p={a.priority} />
           </div>
         )
       })}

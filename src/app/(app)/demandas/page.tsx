@@ -31,7 +31,7 @@ interface SearchParams {
   finalidade?: string; tipo?: string; quartos?: string; bairro?: string
   cidade?: string; valor_max?: string; area_min?: string; vpm2_max?: string
   cond_max?: string; vagas?: string; ordem?: string; periodo?: string
-  salvas?: string; minhas?: string
+  salvas?: string; minhas?: string; st?: string
 }
 
 export default async function DemandasPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -44,10 +44,13 @@ export default async function DemandasPage({ searchParams }: { searchParams: Pro
     .from('saved_demands').select('demand_id').eq('broker_id', user.id)
   const savedSet = new Set(savedRows?.map((r: any) => r.demand_id) ?? [])
 
+  const isMinhas = !!filters.minhas
+  const statusFilter = isMinhas && filters.st === 'atendidas' ? 'atendida' : 'ativa'
+
   let query = supabase
     .from('demands')
     .select('id, broker_id, finalidade, tipo_imovel, cidade, estado, area_min, area_max, quartos_min, vagas_min, valor_min, valor_max, cond_max, status, created_at, profiles(full_name, avatar_url, imobiliaria, autonomo)')
-    .eq('status', 'ativa')
+    .eq('status', statusFilter)
 
   if (filters.finalidade) query = query.eq('finalidade', filters.finalidade)
   if (filters.tipo)       query = query.eq('tipo_imovel', filters.tipo)
@@ -101,11 +104,20 @@ export default async function DemandasPage({ searchParams }: { searchParams: Pro
     })
   }
 
-  const pageTitle = filters.minhas ? 'Minhas demandas'
+  // Bairro stats for dashboard (on main view, not filtered)
+  const bairroCount: Record<string, number> = {}
+  if (!filters.minhas && !filters.salvas) {
+    allLocations?.forEach((loc: any) => { bairroCount[loc.value] = (bairroCount[loc.value] ?? 0) + 1 })
+  }
+  const bairroStats = Object.entries(bairroCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+
+  const pageTitle = isMinhas ? 'Minhas demandas'
     : filters.salvas ? 'Meus favoritos'
     : 'Demandas'
 
-  const isMinhas = !!filters.minhas
+  const isAtendidas = isMinhas && filters.st === 'atendidas'
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
@@ -113,9 +125,51 @@ export default async function DemandasPage({ searchParams }: { searchParams: Pro
         <h1 className="text-lg font-semibold text-stone-700">{pageTitle}</h1>
       </div>
 
+      {/* Tabs ativas/atendidas em "Minhas demandas" */}
+      {isMinhas && (
+        <div className="flex gap-1 mb-4 bg-stone-100 rounded-lg p-1 w-fit">
+          <Link href="/demandas?minhas=1"
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              !isAtendidas ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700'
+            }`}>
+            Ativas
+          </Link>
+          <Link href="/demandas?minhas=1&st=atendidas"
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              isAtendidas ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700'
+            }`}>
+            Atendidas
+          </Link>
+        </div>
+      )}
+
       <Suspense>
         <DemandaFilters total={demands.length} />
       </Suspense>
+
+      {/* Bairro dashboard — only on main view with data */}
+      {bairroStats.length > 0 && (
+        <div className="bg-white rounded-xl border border-stone-200 px-5 py-4 mb-2">
+          <h2 className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-3">Demandas por bairro</h2>
+          <div className="space-y-2">
+            {(() => {
+              const max = bairroStats[0]?.[1] ?? 1
+              return bairroStats.map(([bairro, count]) => (
+                <div key={bairro} className="flex items-center gap-3">
+                  <span className="text-xs text-stone-500 w-32 truncate shrink-0">{bairro}</span>
+                  <div className="flex-1 bg-stone-100 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="h-2 rounded-full bg-emerald-500 transition-all"
+                      style={{ width: `${Math.round((count / max) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-medium text-stone-600 w-5 text-right shrink-0">{count}</span>
+                </div>
+              ))
+            })()}
+          </div>
+        </div>
+      )}
 
       {demands.length === 0 ? (
         <div className="text-center py-20">
@@ -207,26 +261,20 @@ export default async function DemandasPage({ searchParams }: { searchParams: Pro
                   )}
                 </div>
 
-                {/* Corretor: avatar + nome + imobiliária */}
+                {/* Corretor: avatar + nome | imobiliária */}
                 {profile && (
-                  <div className="mt-2 flex items-center justify-between">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold shrink-0 overflow-hidden border border-stone-100">
-                        {profile.avatar_url
-                          ? <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover" />
-                          : profile.full_name?.charAt(0).toUpperCase()
-                        }
-                      </div>
-                      <div className="min-w-0">
-                        <span className="text-xs text-stone-500 truncate block">{profile.full_name}</span>
-                        {imobLabel && (
-                          <span className="text-xs text-stone-400 truncate block">{imobLabel}</span>
-                        )}
-                      </div>
+                  <div className="mt-2 flex items-center gap-2 min-w-0">
+                    <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold shrink-0 overflow-hidden border border-stone-100">
+                      {profile.avatar_url
+                        ? <img src={profile.avatar_url} alt={profile.full_name} className="w-full h-full object-cover" />
+                        : profile.full_name?.charAt(0).toUpperCase()
+                      }
                     </div>
-                    <span className="text-xs text-emerald-700 font-medium group-hover:underline ml-auto shrink-0">
-                      Ver →
-                    </span>
+                    <span className="text-xs font-semibold text-blue-900 truncate">{profile.full_name}</span>
+                    {imobLabel && (
+                      <><span className="text-stone-300 text-xs shrink-0">|</span>
+                      <span className="text-xs text-blue-700 truncate">{imobLabel}</span></>
+                    )}
                   </div>
                 )}
               </Link>

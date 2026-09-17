@@ -13,7 +13,11 @@ export default function DemandActions({ demandId }: { demandId: string }) {
   async function handleAction(status: 'atendida' | 'excluida') {
     setLoading(true)
     await supabase.from('demands').update({ status }).eq('id', demandId)
-    router.push('/demandas?minhas=1')
+    if (status === 'excluida') {
+      router.push('/demandas?minhas=1')
+    } else {
+      router.push('/demandas?minhas=1&st=atendidas')
+    }
     router.refresh()
   }
 

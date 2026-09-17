@@ -10,7 +10,7 @@ export default async function CorretorPage({ params }: { params: Promise<{ id: s
 
   const { data: corretor } = await supabase
     .from('profiles')
-    .select('full_name, creci, phone, instagram, linkedin, bio')
+    .select('full_name, creci, phone, instagram, linkedin, bio, avatar_url, imobiliaria, autonomo')
     .eq('id', id)
     .single()
 
@@ -49,14 +49,31 @@ export default async function CorretorPage({ params }: { params: Promise<{ id: s
       {/* Card do corretor */}
       <div className="bg-white rounded-xl border border-stone-200 p-6">
         <div className="flex items-start justify-between gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl font-bold shrink-0">
-            {corretor.full_name?.charAt(0).toUpperCase() ?? '?'}
+          {/* Avatar - auto-sizing */}
+          <div className="shrink-0">
+            {corretor.avatar_url
+              ? <img src={corretor.avatar_url} alt={corretor.full_name ?? ''} className="w-20 h-20 rounded-2xl object-cover border border-stone-100" />
+              : <div className="w-20 h-20 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-3xl font-bold">
+                  {corretor.full_name?.charAt(0).toUpperCase() ?? '?'}
+                </div>
+            }
           </div>
 
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-semibold text-stone-800">{corretor.full_name}</h1>
+            {/* Name | Imobiliária */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-semibold text-blue-900">{corretor.full_name}</h1>
+              {(corretor.imobiliaria || corretor.autonomo) && (
+                <>
+                  <span className="text-stone-300">|</span>
+                  <span className="text-base font-medium text-blue-800">
+                    {corretor.autonomo ? 'Autônomo' : corretor.imobiliaria}
+                  </span>
+                </>
+              )}
+            </div>
             {corretor.creci && (
-              <p className="text-sm text-stone-500 mt-0.5">CRECI {corretor.creci}</p>
+              <p className="text-sm text-stone-400 mt-0.5">CRECI {corretor.creci}</p>
             )}
             {corretor.bio && (
               <p className="text-sm text-stone-600 mt-2 leading-relaxed">{corretor.bio}</p>
