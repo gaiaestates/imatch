@@ -129,7 +129,7 @@ export default function NonstopSearch({
                 const city   = p.address?.city
 
                 return (
-                  <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer"
+                  <a key={p.id} href={p.url?.startsWith('http') ? p.url : `https://www.usenonstop.com/imoveis/${p.url}`} target="_blank" rel="noopener noreferrer"
                     className="group bg-stone-50 border border-stone-200 rounded-xl overflow-hidden hover:border-stone-400 hover:shadow-sm transition-all block">
 
                     {p.image ? (
