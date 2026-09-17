@@ -56,23 +56,36 @@ export async function GET(req: NextRequest) {
   const cidade      = sp.get('cidade')      ?? ''
   const estado      = sp.get('estado')      ?? ''
   const areas       = sp.get('areas')       ?? ''   // bairros, comma-sep
-  const quartos_min = sp.get('quartos_min')
-  const vagas_min   = sp.get('vagas_min')
-  const valor_min   = sp.get('valor_min')
-  const valor_max   = sp.get('valor_max')
-  const area_min    = sp.get('area_min')
-  const cond_max    = sp.get('cond_max')
+  const quartos_min        = sp.get('quartos_min')
+  const vagas_min          = sp.get('vagas_min')
+  const valor_min          = sp.get('valor_min')
+  const valor_max          = sp.get('valor_max')
+  const aluguel_valor_min  = sp.get('aluguel_valor_min')
+  const aluguel_valor_max  = sp.get('aluguel_valor_max')
+  const area_min           = sp.get('area_min')
+  const cond_max           = sp.get('cond_max')
 
-  const extra: Record<string, string> = {}
-  if (cidade)      extra.city    = cidade
-  if (estado)      extra.state   = estado
-  if (areas)       extra.areas   = areas
-  if (quartos_min) extra.minRooms       = quartos_min
-  if (vagas_min)   extra.minParkingLots = vagas_min
-  if (valor_min)   extra.minVal         = valor_min
-  if (valor_max)   extra.maxVal         = valor_max
-  if (area_min)    extra.minPrivate     = area_min
-  if (cond_max)    extra.maxCondo       = cond_max
+  const baseExtra: Record<string, string> = {}
+  if (cidade)      baseExtra.city          = cidade
+  if (estado)      baseExtra.state         = estado
+  if (areas)       baseExtra.areas         = areas
+  if (quartos_min) baseExtra.minRooms       = quartos_min
+  if (vagas_min)   baseExtra.minParkingLots = vagas_min
+  if (area_min)    baseExtra.minPrivate     = area_min
+  if (cond_max)    baseExtra.maxCondo       = cond_max
+
+  // For venda: use valor_min/valor_max; for locacao: use aluguel_valor_* if set, else valor_*
+  const extraVenda: Record<string, string> = { ...baseExtra }
+  if (valor_min) extraVenda.minVal = valor_min
+  if (valor_max) extraVenda.maxVal = valor_max
+
+  const extraLocacao: Record<string, string> = { ...baseExtra }
+  const locMin = aluguel_valor_min ?? valor_min
+  const locMax = aluguel_valor_max ?? valor_max
+  if (locMin) extraLocacao.minVal = locMin
+  if (locMax) extraLocacao.maxVal = locMax
+
+  const extra = extraVenda // default for non-ambos paths
 
   const tipos = TIPO_MAP[tipo_imovel]
   if (tipos) extra.type = tipos.join(',')
@@ -83,8 +96,8 @@ export async function GET(req: NextRequest) {
 
   if (finalidade === 'ambos') {
     const [venda, locacao] = await Promise.all([
-      fetchTodos('VENDA', extra),
-      fetchTodos('LOCACAO', extra),
+      fetchTodos('VENDA', extraVenda),
+      fetchTodos('LOCACAO', extraLocacao),
     ])
     const seen = new Set<string>()
     properties = []

@@ -247,8 +247,14 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
         <Row label="Vagas mínimas"     value={demand.vagas_min    ? `${demand.vagas_min}+`    : null} prio={demand.vagas_prio} />
         <Row label="Área mínima"       value={demand.area_min     ? `${demand.area_min} m²`   : null} prio={demand.area_min_prio} />
         <Row label="Área máxima"       value={demand.area_max     ? `${demand.area_max} m²`   : null} prio={demand.area_max_prio} />
-        <Row label="Valor mínimo"      value={fmtBRL(demand.valor_min)} prio={demand.valor_min_prio} />
-        <Row label="Valor máximo"      value={fmtBRL(demand.valor_max)} prio={demand.valor_max_prio} />
+        <Row label={demand.finalidade === 'aluguel' ? 'Aluguel mínimo' : 'Valor de venda mín.'} value={fmtBRL(demand.valor_min)} prio={demand.valor_min_prio} />
+        <Row label={demand.finalidade === 'aluguel' ? 'Aluguel máximo' : 'Valor de venda máx.'} value={fmtBRL(demand.valor_max)} prio={demand.valor_max_prio} />
+        {demand.finalidade === 'ambos' && (
+          <>
+            <Row label="Aluguel mínimo" value={fmtBRL(demand.aluguel_valor_min)} prio={demand.aluguel_valor_min_prio} />
+            <Row label="Aluguel máximo" value={fmtBRL(demand.aluguel_valor_max)} prio={demand.aluguel_valor_max_prio} />
+          </>
+        )}
         <Row label="Condomínio máx."   value={fmtBRL(demand.cond_max)}  prio={demand.cond_prio} />
         <Row label="IPTU máx./mês"     value={fmtBRL(demand.iptu_max)}  prio={demand.iptu_prio} />
       </Section>
@@ -331,6 +337,8 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
             valor_min_prio={demand.valor_min_prio}
             valor_max={demand.valor_max}
             valor_max_prio={demand.valor_max_prio}
+            aluguel_valor_min={demand.aluguel_valor_min}
+            aluguel_valor_max={demand.aluguel_valor_max}
             area_min={demand.area_min}
             area_min_prio={demand.area_min_prio}
             cond_max={demand.cond_max}

@@ -88,6 +88,10 @@ export default function EditarDemandaPage() {
   const [valorMax, setValorMax] = useState('')
   const [valorMinPrio, setValorMinPrio] = useState<Prio>(null)
   const [valorMaxPrio, setValorMaxPrio] = useState<Prio>(null)
+  const [aluguelValorMin, setAluguelValorMin] = useState('')
+  const [aluguelValorMax, setAluguelValorMax] = useState('')
+  const [aluguelValorMinPrio, setAluguelValorMinPrio] = useState<Prio>(null)
+  const [aluguelValorMaxPrio, setAluguelValorMaxPrio] = useState<Prio>(null)
   const [condMax, setCondMax] = useState('')
   const [condPrio, setCondPrio] = useState<Prio>(null)
   const [iptuMax, setIptuMax] = useState('')
@@ -207,10 +211,14 @@ export default function EditarDemandaPage() {
       const brl = (v: number | null) => v ? formatBRL(String(Math.round(v))) : ''
       if (demand.valor_min) setValorMin(brl(demand.valor_min))
       if (demand.valor_max) setValorMax(brl(demand.valor_max))
+      if (demand.aluguel_valor_min) setAluguelValorMin(brl(demand.aluguel_valor_min))
+      if (demand.aluguel_valor_max) setAluguelValorMax(brl(demand.aluguel_valor_max))
       if (demand.cond_max)  setCondMax(brl(demand.cond_max))
       if (demand.iptu_max)  setIptuMax(brl(demand.iptu_max))
       setValorMinPrio(demand.valor_min_prio ?? null)
       setValorMaxPrio(demand.valor_max_prio ?? null)
+      setAluguelValorMinPrio(demand.aluguel_valor_min_prio ?? null)
+      setAluguelValorMaxPrio(demand.aluguel_valor_max_prio ?? null)
       setCondPrio(demand.cond_prio ?? null)
       setIptuPrio(demand.iptu_prio ?? null)
       setAceitaFin(demand.aceita_financiamento === 'on')
@@ -356,6 +364,10 @@ export default function EditarDemandaPage() {
       valor_max: valorMax ? Number(parseBRL(valorMax)) : null,
       valor_min_prio: valorMinPrio,
       valor_max_prio: valorMaxPrio,
+      aluguel_valor_min: (finalidade === 'ambos' && aluguelValorMin) ? Number(parseBRL(aluguelValorMin)) : null,
+      aluguel_valor_max: (finalidade === 'ambos' && aluguelValorMax) ? Number(parseBRL(aluguelValorMax)) : null,
+      aluguel_valor_min_prio: finalidade === 'ambos' ? aluguelValorMinPrio : null,
+      aluguel_valor_max_prio: finalidade === 'ambos' ? aluguelValorMaxPrio : null,
       cond_max: condMax ? Number(parseBRL(condMax)) : null,
       cond_prio: condPrio,
       iptu_max: iptuMax ? Number(parseBRL(iptuMax)) : null,
@@ -640,9 +652,11 @@ export default function EditarDemandaPage() {
         {/* 6 - Financeiro */}
         <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
           <h3 className="text-sm font-semibold text-stone-700">Financeiro</h3>
+
+          {/* Venda (ou aluguel quando finalidade != 'ambos') */}
           <div>
             <p className="text-xs text-stone-400 font-medium uppercase tracking-wider mb-2">
-              {finalidade === 'aluguel' ? 'Valor do aluguel (R$)' : finalidade === 'ambos' ? 'Valor de venda / aluguel (R$)' : 'Valor de venda (R$)'}
+              {finalidade === 'aluguel' ? 'Valor do aluguel (R$)' : 'Valor de venda (R$)'}
             </p>
             <div className="grid grid-cols-2 gap-3">
               {[
@@ -663,6 +677,31 @@ export default function EditarDemandaPage() {
               ))}
             </div>
           </div>
+
+          {/* Aluguel separado — só aparece quando finalidade === 'ambos' */}
+          {finalidade === 'ambos' && (
+            <div>
+              <p className="text-xs text-stone-400 font-medium uppercase tracking-wider mb-2">Valor do aluguel (R$)</p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: 'Mínimo', val: aluguelValorMin, setVal: setAluguelValorMin, prio: aluguelValorMinPrio, setPrio: setAluguelValorMinPrio },
+                  { label: 'Máximo', val: aluguelValorMax, setVal: setAluguelValorMax, prio: aluguelValorMaxPrio, setPrio: setAluguelValorMaxPrio },
+                ].map(({ label, val, setVal, prio, setPrio }) => (
+                  <div key={label}>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-stone-500">{label}</label>
+                      <PrioChip value={prio} onToggle={() => setPrio(nextPrio(prio))} />
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
+                      <input type="text" inputMode="numeric" value={val} onChange={e => setVal(formatBRL(e.target.value))}
+                        className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="0" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             {[
               { label: 'Condomínio máx.', val: condMax, setVal: setCondMax, prio: condPrio, setPrio: setCondPrio },

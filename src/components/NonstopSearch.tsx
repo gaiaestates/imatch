@@ -42,10 +42,12 @@ interface Props {
   quartos_prio?:   string | null
   vagas_min:       number | null
   vagas_prio?:     string | null
-  valor_min:       number | null
-  valor_min_prio?: string | null
-  valor_max:       number | null
-  valor_max_prio?: string | null
+  valor_min:            number | null
+  valor_min_prio?:      string | null
+  valor_max:            number | null
+  valor_max_prio?:      string | null
+  aluguel_valor_min?:   number | null
+  aluguel_valor_max?:   number | null
   area_min:        number | null
   area_min_prio?:  string | null
   cond_max:        number | null
@@ -56,7 +58,10 @@ type Check = { label: string; met: boolean; mandatory: boolean }
 
 function calcChecks(p: any, props: Props): Check[] {
   const checks: Check[] = []
-  const price = p.values?.sale ?? p.values?.longStay
+  const salePrice  = p.values?.sale
+  const rentPrice  = p.values?.longStay
+  // Use the appropriate price for this property; if it has both, prefer sale
+  const price = salePrice ?? rentPrice
 
   if (props.quartos_min) checks.push({
     label: `${props.quartos_min}+ qtos`,
@@ -68,16 +73,47 @@ function calcChecks(p: any, props: Props): Check[] {
     met: (p.areas?.private ?? 0) >= props.area_min,
     mandatory: props.area_min_prio === 'req',
   })
-  if (props.valor_min) checks.push({
-    label: `${fmtBRL(props.valor_min)} mín`,
-    met: price != null && price >= props.valor_min,
-    mandatory: props.valor_min_prio === 'req',
-  })
-  if (props.valor_max) checks.push({
-    label: `${fmtBRL(props.valor_max)} máx`,
-    met: price != null && price <= props.valor_max,
-    mandatory: props.valor_max_prio === 'req',
-  })
+
+  // When finalidade is 'ambos', check sale price against valor_min/max
+  // and rent price against aluguel_valor_min/max
+  if (salePrice != null) {
+    if (props.valor_min) checks.push({
+      label: `venda ${fmtBRL(props.valor_min)}+ mín`,
+      met: salePrice >= props.valor_min,
+      mandatory: props.valor_min_prio === 'req',
+    })
+    if (props.valor_max) checks.push({
+      label: `venda ${fmtBRL(props.valor_max)} máx`,
+      met: salePrice <= props.valor_max,
+      mandatory: props.valor_max_prio === 'req',
+    })
+  } else if (rentPrice != null) {
+    // Pure rental property — check against aluguel fields if present, otherwise valor fields
+    const rMin = props.aluguel_valor_min ?? props.valor_min
+    const rMax = props.aluguel_valor_max ?? props.valor_max
+    if (rMin) checks.push({
+      label: `aluguel ${fmtBRL(rMin)}+ mín`,
+      met: rentPrice >= rMin,
+      mandatory: props.valor_min_prio === 'req',
+    })
+    if (rMax) checks.push({
+      label: `aluguel ${fmtBRL(rMax)} máx`,
+      met: rentPrice <= rMax,
+      mandatory: props.valor_max_prio === 'req',
+    })
+  } else if (price != null) {
+    // Fallback: generic price check
+    if (props.valor_min) checks.push({
+      label: `${fmtBRL(props.valor_min)} mín`,
+      met: price >= props.valor_min,
+      mandatory: props.valor_min_prio === 'req',
+    })
+    if (props.valor_max) checks.push({
+      label: `${fmtBRL(props.valor_max)} máx`,
+      met: price <= props.valor_max,
+      mandatory: props.valor_max_prio === 'req',
+    })
+  }
   if (props.vagas_min) checks.push({
     label: `${props.vagas_min}+ vagas`,
     met: (p.parkingLots ?? 0) >= props.vagas_min,
@@ -148,7 +184,8 @@ function CheckRow({ checks }: { checks: Check[] }) {
 
 export default function NonstopSearch(props: Props) {
   const { finalidade, tipo_imovel, cidade, estado, bairros,
-          quartos_min, vagas_min, valor_min, valor_max, area_min, cond_max } = props
+          quartos_min, vagas_min, valor_min, valor_max,
+          aluguel_valor_min, aluguel_valor_max, area_min, cond_max } = props
 
   const [loading,    setLoading]    = useState(false)
   const [properties, setProperties] = useState<any[] | null>(null)
@@ -165,9 +202,11 @@ export default function NonstopSearch(props: Props) {
       if (estado)      qs.set('estado', estado)
       if (bairros.length) qs.set('areas', bairros.join(','))
       if (quartos_min) qs.set('quartos_min', String(quartos_min))
-      if (vagas_min)   qs.set('vagas_min', String(vagas_min))
-      if (valor_min)   qs.set('valor_min', String(valor_min))
-      if (valor_max)   qs.set('valor_max', String(valor_max))
+      if (vagas_min)          qs.set('vagas_min', String(vagas_min))
+      if (valor_min)          qs.set('valor_min', String(valor_min))
+      if (valor_max)          qs.set('valor_max', String(valor_max))
+      if (aluguel_valor_min)  qs.set('aluguel_valor_min', String(aluguel_valor_min))
+      if (aluguel_valor_max)  qs.set('aluguel_valor_max', String(aluguel_valor_max))
       if (area_min)    qs.set('area_min', String(area_min))
       if (cond_max)    qs.set('cond_max', String(cond_max))
 
@@ -235,7 +274,7 @@ export default function NonstopSearch(props: Props) {
                 const bairro = p.address?.area
                 const city   = p.address?.city
                 const checks = (p._checks ?? []) as Check[]
-                const href   = p.fullUrl ?? (p.url?.startsWith('http') ? p.url : null)
+                const href   = p.fullUrl ?? (p.url ? `https://www.usenonstop.com/imoveis/${p.url}` : null)
 
                 return (
                   <a key={p.id} {...(href ? { href, target: '_blank', rel: 'noopener noreferrer' } : {})}

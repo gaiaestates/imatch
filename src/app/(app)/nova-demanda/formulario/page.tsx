@@ -95,11 +95,16 @@ export default function NovaDemandaPage() {
   const [vagas, setVagas] = useState('')
   const [vagasPrio, setVagasPrio] = useState<Prio>(null)
 
-  // Financeiro
+  // Financeiro — venda (ou aluguel quando finalidade != 'ambos')
   const [valorMin, setValorMin] = useState('')
   const [valorMax, setValorMax] = useState('')
   const [valorMinPrio, setValorMinPrio] = useState<Prio>(null)
   const [valorMaxPrio, setValorMaxPrio] = useState<Prio>(null)
+  // Financeiro — aluguel específico (só usado quando finalidade === 'ambos')
+  const [aluguelValorMin, setAluguelValorMin] = useState('')
+  const [aluguelValorMax, setAluguelValorMax] = useState('')
+  const [aluguelValorMinPrio, setAluguelValorMinPrio] = useState<Prio>(null)
+  const [aluguelValorMaxPrio, setAluguelValorMaxPrio] = useState<Prio>(null)
   const [condMax, setCondMax] = useState('')
   const [condPrio, setCondPrio] = useState<Prio>(null)
   const [iptuMax, setIptuMax] = useState('')
@@ -330,6 +335,10 @@ export default function NovaDemandaPage() {
       valor_max: valorMax ? Number(parseBRL(valorMax)) : null,
       valor_min_prio: valorMinPrio,
       valor_max_prio: valorMaxPrio,
+      aluguel_valor_min: (finalidade === 'ambos' && aluguelValorMin) ? Number(parseBRL(aluguelValorMin)) : null,
+      aluguel_valor_max: (finalidade === 'ambos' && aluguelValorMax) ? Number(parseBRL(aluguelValorMax)) : null,
+      aluguel_valor_min_prio: finalidade === 'ambos' ? aluguelValorMinPrio : null,
+      aluguel_valor_max_prio: finalidade === 'ambos' ? aluguelValorMaxPrio : null,
       cond_max: condMax ? Number(parseBRL(condMax)) : null,
       cond_prio: condPrio,
       iptu_max: iptuMax ? Number(parseBRL(iptuMax)) : null,
@@ -652,9 +661,11 @@ export default function NovaDemandaPage() {
         {/* 6 - Financeiro */}
         <div className="bg-white rounded-xl border border-stone-200 p-4 space-y-3">
           <h3 className="text-sm font-semibold text-stone-700">Financeiro</h3>
+
+          {/* Venda (ou aluguel quando finalidade != 'ambos') */}
           <div>
             <p className="text-xs text-stone-400 font-medium uppercase tracking-wider mb-2">
-              {finalidade === 'aluguel' ? 'Valor do aluguel (R$)' : finalidade === 'ambos' ? 'Valor de venda / aluguel (R$)' : 'Valor de venda (R$)'}
+              {finalidade === 'aluguel' ? 'Valor do aluguel (R$)' : 'Valor de venda (R$)'}
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -681,6 +692,37 @@ export default function NovaDemandaPage() {
               </div>
             </div>
           </div>
+
+          {/* Aluguel separado — só aparece quando finalidade === 'ambos' */}
+          {finalidade === 'ambos' && (
+            <div>
+              <p className="text-xs text-stone-400 font-medium uppercase tracking-wider mb-2">Valor do aluguel (R$)</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-stone-500">Mínimo</label>
+                    <PrioChip value={aluguelValorMinPrio} onToggle={() => setAluguelValorMinPrio(nextPrio(aluguelValorMinPrio))} />
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
+                    <input type="text" inputMode="numeric" value={aluguelValorMin} onChange={e => setAluguelValorMin(formatBRL(e.target.value))}
+                      className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="0" />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-stone-500">Máximo</label>
+                    <PrioChip value={aluguelValorMaxPrio} onToggle={() => setAluguelValorMaxPrio(nextPrio(aluguelValorMaxPrio))} />
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-stone-400">R$</span>
+                    <input type="text" inputMode="numeric" value={aluguelValorMax} onChange={e => setAluguelValorMax(formatBRL(e.target.value))}
+                      className="w-full border border-stone-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="0" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <div className="flex items-center justify-between mb-1">
