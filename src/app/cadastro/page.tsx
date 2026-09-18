@@ -22,6 +22,7 @@ export default function CadastroPage() {
   async function handleCadastro(e: React.FormEvent) {
     e.preventDefault()
     if (!phone) { setError('WhatsApp é obrigatório.'); return }
+    if (!creci) { setError('CRECI é obrigatório.'); return }
     if (!autonomo && !imobiliaria) { setError('Informe a imobiliária ou marque "Sou autônomo".'); return }
 
     setLoading(true)
@@ -54,7 +55,15 @@ export default function CadastroPage() {
         phone,
         imobiliaria: autonomo ? null : imobiliaria,
         autonomo,
+        creci_status: 'pendente',
       }).eq('id', data.user.id)
+
+      // Verificação automática assíncrona (não bloqueia o cadastro)
+      fetch('/api/creci/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ creci }),
+      }).catch(() => {})
     }
 
     router.push('/demandas')
@@ -154,9 +163,9 @@ export default function CadastroPage() {
 
           <div>
             <label className="block text-sm font-medium text-stone-700 mb-1">
-              CRECI <span className="text-stone-400 font-normal">(opcional)</span>
+              CRECI <span className="text-red-500">*</span>
             </label>
-            <input type="text" value={creci} onChange={e => setCreci(e.target.value)}
+            <input type="text" value={creci} onChange={e => setCreci(e.target.value)} required
               className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
               placeholder="12345-F" />
           </div>

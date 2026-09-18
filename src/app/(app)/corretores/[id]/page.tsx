@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import CreciActions from './CreciActions'
 
 export default async function CorretorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -8,11 +9,15 @@ export default async function CorretorPage({ params }: { params: Promise<{ id: s
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: corretor } = await supabase
-    .from('profiles')
-    .select('full_name, creci, phone, instagram, linkedin, bio, avatar_url, imobiliaria, autonomo')
-    .eq('id', id)
-    .single()
+  const [{ data: corretor }, { data: myProfile }] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('full_name, creci, creci_status, creci_verificado_em, phone, instagram, linkedin, bio, avatar_url, imobiliaria, autonomo')
+      .eq('id', id)
+      .single(),
+    supabase.from('profiles').select('is_admin').eq('id', user.id).single(),
+  ])
+  const isAdmin = (myProfile as any)?.is_admin === true
 
   if (!corretor) redirect('/demandas')
 
@@ -73,19 +78,43 @@ export default async function CorretorPage({ params }: { params: Promise<{ id: s
               )}
             </div>
             {corretor.creci && (
-              <p className="text-sm text-stone-400 mt-0.5">CRECI {corretor.creci}</p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <p className="text-sm text-stone-400">CRECI {corretor.creci}</p>
+                {corretor.creci_status === 'ativo' && (
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✓ Ativo</span>
+                )}
+                {corretor.creci_status === 'inativo' && (
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">✗ Inativo</span>
+                )}
+                {corretor.creci_status === 'nao_encontrado' && (
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Não encontrado</span>
+                )}
+                {(corretor.creci_status === 'pendente' || corretor.creci_status === 'erro' || !corretor.creci_status) && (
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-stone-100 text-stone-500">Pendente</span>
+                )}
+              </div>
             )}
             {corretor.bio && (
               <p className="text-sm text-stone-600 mt-2 leading-relaxed">{corretor.bio}</p>
             )}
           </div>
 
-          {isOwn && (
-            <Link href="/perfil"
-              className="text-xs text-stone-400 hover:text-emerald-700 border border-stone-200 px-3 py-1.5 rounded-lg hover:border-emerald-300 transition-colors shrink-0">
-              ✏️ Editar perfil
-            </Link>
-          )}
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            {isOwn && (
+              <Link href="/perfil"
+                className="text-xs text-stone-400 hover:text-emerald-700 border border-stone-200 px-3 py-1.5 rounded-lg hover:border-emerald-300 transition-colors">
+                ✏️ Editar perfil
+              </Link>
+            )}
+            {isAdmin && corretor.creci && (
+              <CreciActions
+                userId={id}
+                creci={corretor.creci}
+                currentStatus={corretor.creci_status ?? 'pendente'}
+                verificadoEm={corretor.creci_verificado_em}
+              />
+            )}
+          </div>
         </div>
 
         {/* Contato */}
