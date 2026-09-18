@@ -2,27 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const BASE = 'https://www.usenonstop.com/api/unstable'
 
-// Retorna a base do subscriber, ex: https://www.usenonstop.com/imoveis/gaiaestates
-async function fetchSubscriberBase(token: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${BASE}/site/urls`, {
-      headers: { Authorization: `Bearer ${token}` },
-      next: { revalidate: 3600 },
-    })
-    if (!res.ok) return null
-    const urls: string[] = await res.json()
-    const first = urls.find(u => u.includes('/imoveis/'))
-    if (!first) return null
-    // first é algo como https://domain.com/imoveis/gaiaestates/slug-do-imovel
-    const afterImoveis = first.split('/imoveis/')[1] ?? ''
-    const subscriberSlug = afterImoveis.split('/')[0]
-    if (!subscriberSlug) return null
-    const domain = first.split('/imoveis/')[0]
-    return `${domain}/imoveis/${subscriberSlug}`
-  } catch {
-    return null
-  }
-}
 
 const TIPO_MAP: Record<string, string[]> = {
   'Apartamento':        ['APARTAMENTO_TIPO', 'APARTAMENTO_GARDEN', 'FLAT', 'STUDIO', 'KITNET', 'LOFT', 'DUPLEX', 'TRIPLEX'],
@@ -115,18 +94,15 @@ export async function GET(req: NextRequest) {
     properties = await fetchTodos(finalidade === 'compra' ? 'VENDA' : 'LOCACAO', extra)
   }
 
-  // Base do subscriber: vem da API ou do env como fallback
-  // Ex: https://www.usenonstop.com/imoveis/gaiaestates
-  const subscriberSlugEnv = process.env.NONSTOP_SUBSCRIBER_SLUG
-  const subscriberBase =
-    (await fetchSubscriberBase(token)) ??
-    (subscriberSlugEnv ? `https://www.usenonstop.com/imoveis/${subscriberSlugEnv}` : null)
-
-  // URL correta: {subscriberBase}/{p.id}  ex: .../imoveis/gaiaestates/UYAH1
-  const propertiesWithUrls = properties.slice(0, 20).map((p: any) => ({
-    ...p,
-    fullUrl: subscriberBase && p.id ? `${subscriberBase}/${p.id}` : null,
-  }))
+  // URL por propriedade: brokerage.slug > user.slug + base36Id
+  // Ex: https://www.usenonstop.com/imoveis/gaiaestates/UYAH1
+  const propertiesWithUrls = properties.slice(0, 20).map((p: any) => {
+    const slug = p.user?.brokerage?.slug ?? p.user?.slug ?? null
+    const fullUrl = slug && p.base36Id
+      ? `https://www.usenonstop.com/imoveis/${slug}/${p.base36Id}`
+      : null
+    return { ...p, fullUrl }
+  })
 
   return NextResponse.json({ properties: propertiesWithUrls })
 }
