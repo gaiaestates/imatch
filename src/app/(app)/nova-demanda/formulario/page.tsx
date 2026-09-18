@@ -70,10 +70,11 @@ export default function NovaDemandaPage() {
 
   // Localização
   const [estado, setEstado] = useState('')
-  const [cidades, setCidades] = useState<string[]>([])
+  const [cidades, setCidades] = useState<{id: number; nome: string}[]>([])
   const [cidadeInput, setCidadeInput] = useState('')
   const [cidadeSuggestions, setCidadeSuggestions] = useState<string[]>([])
   const [loadingCidades, setLoadingCidades] = useState(false)
+  const [distritos, setDistritos] = useState<string[]>([])
   const [bairros, setBairros] = useState<string[]>([])
   const [bairroInput, setBairroInput] = useState('')
   const [bairroSuggestions, setBairroSuggestions] = useState<string[]>([])
@@ -125,18 +126,33 @@ export default function NovaDemandaPage() {
   const [prazoUnidade, setPrazoUnidade] = useState<'meses' | 'anos'>('meses')
   const [observacoes, setObservacoes] = useState('')
 
+  function normalize(s: string) {
+    return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  }
+
+  async function fetchDistritos(municipioId: number) {
+    try {
+      const res = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/municipios/${municipioId}/distritos`)
+      const d: {nome: string}[] = await res.json()
+      setDistritos(d.map(x => x.nome).sort())
+    } catch { setDistritos([]) }
+  }
+
   // IBGE — cidades
   useEffect(() => {
-    if (!estado) { setCidades([]); setCidadeInput(''); return }
+    if (!estado) { setCidades([]); setCidadeInput(''); setDistritos([]); return }
     setLoadingCidades(true); setCidadeInput('')
     fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${estado}/municipios?orderBy=nome`)
       .then(r => r.json())
-      .then((d: { nome: string }[]) => {
-        setCidades(d.map(x => x.nome))
+      .then((d: {id: number; nome: string}[]) => {
+        setCidades(d)
         setLoadingCidades(false)
         if (pendingCityRef.current) {
-          setCidadeInput(pendingCityRef.current)
+          const pending = pendingCityRef.current
           pendingCityRef.current = null
+          const match = d.find(c => normalize(c.nome) === normalize(pending))
+          if (match) { setCidadeInput(match.nome); fetchDistritos(match.id) }
+          else setCidadeInput(pending)
         }
       })
       .catch(() => setLoadingCidades(false))
@@ -144,29 +160,31 @@ export default function NovaDemandaPage() {
 
   useEffect(() => {
     if (!cidadeInput || cidadeInput.length < 2) { setCidadeSuggestions([]); return }
-    const low = cidadeInput.toLowerCase()
-    setCidadeSuggestions(cidades.filter(c => c.toLowerCase().includes(low)).slice(0, 6))
+    const nq = normalize(cidadeInput)
+    setCidadeSuggestions(cidades.filter(c => normalize(c.nome).includes(nq)).map(c => c.nome).slice(0, 6))
   }, [cidadeInput, cidades])
 
-  // Supabase — autocomplete de bairros
+  // Bairros: IBGE distritos (client-side) + demand_locations (Supabase)
   useEffect(() => {
     if (!bairroInput || bairroInput.length < 2) { setBairroSuggestions([]); return }
+    const nq = normalize(bairroInput)
+    const fromDistritos = distritos
+      .filter(d => normalize(d).includes(nq) && !bairros.includes(d))
+      .slice(0, 5)
     const timer = setTimeout(async () => {
       const { data } = await supabase
         .from('demand_locations')
         .select('value')
         .eq('type', 'bairro')
         .ilike('value', `%${bairroInput}%`)
-        .limit(10)
-      if (data) {
-        const unique = [...new Set(data.map((r: any) => r.value as string))]
-          .filter(b => !bairros.includes(b))
-          .slice(0, 7)
-        setBairroSuggestions(unique)
-      }
-    }, 250)
+        .limit(8)
+      const fromDB = data
+        ? [...new Set(data.map((r: any) => r.value as string))].filter(b => !bairros.includes(b) && !fromDistritos.includes(b))
+        : []
+      setBairroSuggestions([...fromDistritos, ...fromDB].slice(0, 8))
+    }, 200)
     return () => clearTimeout(timer)
-  }, [bairroInput, bairros])
+  }, [bairroInput, bairros, distritos])
 
   // Fecha dropdown bairros ao clicar fora
   useEffect(() => {
@@ -565,7 +583,12 @@ export default function NovaDemandaPage() {
             {cidadeSuggestions.length > 0 && (
               <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-stone-200 rounded-lg shadow-lg overflow-hidden">
                 {cidadeSuggestions.map(c => (
-                  <button key={c} type="button" onClick={() => { setCidadeInput(c); setCidadeSuggestions([]) }}
+                  <button key={c} type="button" onClick={() => {
+                    setCidadeInput(c)
+                    setCidadeSuggestions([])
+                    const found = cidades.find(x => x.nome === c)
+                    if (found) fetchDistritos(found.id)
+                  }}
                     className="w-full text-left px-3 py-2 text-sm text-stone-700 hover:bg-stone-50 border-b border-stone-100 last:border-0">{c}</button>
                 ))}
               </div>
