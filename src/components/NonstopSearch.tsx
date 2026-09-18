@@ -274,7 +274,7 @@ export default function NonstopSearch(props: Props) {
                 const bairro = p.address?.area
                 const city   = p.address?.city
                 const checks = (p._checks ?? []) as Check[]
-                const href   = p.fullUrl ?? (p.url ? `https://www.usenonstop.com/imoveis/${p.url}` : null)
+                const href   = p.fullUrl ?? null
 
                 return (
                   <a key={p.id} {...(href ? { href, target: '_blank', rel: 'noopener noreferrer' } : {})}
