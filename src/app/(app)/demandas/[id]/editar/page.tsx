@@ -166,14 +166,16 @@ export default function EditarDemandaPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      const [{ data: demand }, { data: locations }, { data: amenidades }] = await Promise.all([
+      const [{ data: demand }, { data: locations }, { data: amenidades }, { data: myProfile }] = await Promise.all([
         supabase.from('demands').select('*').eq('id', id).single(),
         supabase.from('demand_locations').select('type, value').eq('demand_id', id),
         supabase.from('demand_amenities').select('amenity, priority').eq('demand_id', id),
+        supabase.from('profiles').select('is_admin').eq('id', user.id).single(),
       ])
 
       if (!demand) { router.push('/demandas'); return }
-      if (demand.broker_id !== user.id) { router.push(`/demandas/${id}`); return }
+      const isAdmin = (myProfile as any)?.is_admin === true
+      if (demand.broker_id !== user.id && !isAdmin) { router.push(`/demandas/${id}`); return }
 
       // Finalidade
       setCompra(demand.finalidade === 'compra' || demand.finalidade === 'ambos')

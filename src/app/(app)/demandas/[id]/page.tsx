@@ -64,6 +64,7 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
     { data: matches },
     { data: lastJob },
     { data: savedRow },
+    { data: myProfile },
   ] = await Promise.all([
     supabase.from('demand_locations').select('type, value').eq('demand_id', id),
     supabase.from('demand_amenities').select('amenity, priority').eq('demand_id', id),
@@ -75,10 +76,13 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
     supabase.from('match_jobs').select('status, finished_at, total_found')
       .eq('demand_id', id).order('created_at', { ascending: false }).limit(1).single(),
     supabase.from('saved_demands').select('id').eq('broker_id', user.id).eq('demand_id', id).maybeSingle(),
+    supabase.from('profiles').select('is_admin').eq('id', user.id).single(),
   ])
 
-  const isOwner = demand.broker_id === user.id
-  const isSaved = !!savedRow
+  const isOwner   = demand.broker_id === user.id
+  const isAdmin   = (myProfile as any)?.is_admin === true
+  const canEdit   = isOwner || isAdmin
+  const isSaved   = !!savedRow
 
   const profile = demand.profiles as any
   const corretorNome = profile?.full_name ?? 'o corretor'
@@ -203,7 +207,7 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
           </div>
           <div className="flex flex-col items-end gap-2 shrink-0">
             <div className="flex items-center gap-2">
-              {isOwner && (
+              {canEdit && (
                 <Link href={`/demandas/${id}/editar`}
                   className="inline-flex items-center gap-1.5 text-sm text-stone-600 hover:text-stone-800 border border-stone-300 hover:border-stone-500 px-3 py-2 rounded-xl transition-colors">
                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -214,7 +218,7 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
                 </Link>
               )}
               <SaveButton demandId={id} isSaved={isSaved} size="md" />
-              {waUrl && !isOwner && (
+              {waUrl && !canEdit && (
                 <a href={waUrl} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-1.5 bg-green-500 hover:bg-green-600 text-white text-sm font-medium px-3 py-2 rounded-xl transition-colors">
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -224,8 +228,8 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
                 </a>
               )}
             </div>
-            {isOwner && <MatchTrigger demandId={id} lastJob={lastJob} />}
-            {isOwner && <DemandActions demandId={id} />}
+            {canEdit && <MatchTrigger demandId={id} lastJob={lastJob} />}
+            {canEdit && <DemandActions demandId={id} />}
           </div>
         </div>
       </div>
@@ -367,7 +371,7 @@ export default async function DemandaDetailPage({ params }: { params: Promise<{ 
         {!matches || matches.length === 0 ? (
           <div className="bg-white rounded-xl border border-stone-200 p-8 text-center">
             <p className="text-stone-400 text-sm">Nenhum match encontrado ainda.</p>
-            {isOwner && <p className="text-stone-400 text-xs mt-1">Clique em "Buscar matches" para iniciar.</p>}
+            {canEdit && <p className="text-stone-400 text-xs mt-1">Clique em "Buscar matches" para iniciar.</p>}
           </div>
         ) : (
           <div className="space-y-3">
